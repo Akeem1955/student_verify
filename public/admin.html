@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Portal - Student Verification System</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        .admin-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            background: var(--light-bg);
+        }
+
+        .admin-box {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 600px;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-family: inherit;
+            font-size: 1rem;
+        }
+
+        .form-group textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .drop-zone {
+            border: 2px dashed var(--primary-color);
+            border-radius: 10px;
+            padding: 2rem;
+            text-align: center;
+            margin: 1rem 0;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .drop-zone:hover {
+            background-color: rgba(33, 150, 243, 0.05);
+        }
+
+        .drop-zone.dragover {
+            background-color: rgba(33, 150, 243, 0.1);
+            border-color: var(--secondary-color);
+        }
+
+        .result-box {
+            margin-top: 2rem;
+            padding: 1rem;
+            border-radius: 5px;
+            display: none;
+        }
+
+        .result-box.success {
+            background-color: rgba(76, 175, 80, 0.1);
+            border: 1px solid var(--secondary-color);
+            color: var(--secondary-color);
+        }
+
+        .result-box.error {
+            background-color: rgba(244, 67, 54, 0.1);
+            border: 1px solid #f44336;
+            color: #f44336;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 1rem;
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+
+        .upload-history {
+            margin-top: 2rem;
+            padding-top: 2rem;
+            border-top: 1px solid #ddd;
+        }
+
+        .history-item {
+            padding: 1rem;
+            background: var(--light-bg);
+            border-radius: 5px;
+            margin-bottom: 1rem;
+        }
+
+        .history-item h4 {
+            margin: 0 0 0.5rem 0;
+        }
+
+        .history-item p {
+            margin: 0;
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        /* Loading Dialog Styles */
+        .loading-dialog {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .loading-dialog.active {
+            display: flex;
+        }
+
+        .loading-content {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            color: var(--text-color);
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .loading-subtext {
+            color: #666;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <div class="admin-box">
+            <a href="/" class="back-link">← Back to Home</a>
+            <h1>Admin Portal</h1>
+            <p>Upload and register student documents on the blockchain.</p>
+            
+            <form id="uploadForm">
+                <div class="form-group">
+                    <label for="studentName">Student Name</label>
+                    <input type="text" id="studentName" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="documentType">Document Type</label>
+                    <select id="documentType" required>
+                        <option value="">Select document type</option>
+                        <option value="transcript">Academic Transcript</option>
+                        <option value="diploma">Diploma</option>
+                        <option value="certificate">Certificate</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="description">Description</label>
+                    <textarea id="description" placeholder="Enter any additional details about the document"></textarea>
+                </div>
+
+                <div class="drop-zone" id="dropZone">
+                    <p>Drag and drop your document here</p>
+                    <p>or</p>
+                    <input type="file" id="fileInput" style="display: none" accept=".pdf,.doc,.docx,.txt">
+                    <button type="button" class="cta-button" onclick="document.getElementById('fileInput').click()">Choose File</button>
+                </div>
+
+                <button type="submit" class="cta-button" style="width: 100%;">Upload to Blockchain</button>
+            </form>
+
+            <div class="result-box" id="resultBox"></div>
+
+            <div class="upload-history">
+                <h3>Recent Uploads</h3>
+                <div id="historyList">
+                    <!-- History items will be added here dynamically -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Dialog -->
+    <div class="loading-dialog" id="loadingDialog">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <div class="loading-text">Uploading Document</div>
+            <div class="loading-subtext">This may take a few moments...</div>
+        </div>
+    </div>
+
+    <script>
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const resultBox = document.getElementById('resultBox');
+        const uploadForm = document.getElementById('uploadForm');
+        const historyList = document.getElementById('historyList');
+        const loadingDialog = document.getElementById('loadingDialog');
+
+        // Prevent default drag behaviors
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefaults, false);
+            document.body.addEventListener(eventName, preventDefaults, false);
+        });
+
+        // Highlight drop zone when item is dragged over it
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, highlight, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, unhighlight, false);
+        });
+
+        // Handle dropped files
+        dropZone.addEventListener('drop', handleDrop, false);
+        fileInput.addEventListener('change', handleFiles, false);
+
+        function preventDefaults (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        function highlight(e) {
+            dropZone.classList.add('dragover');
+        }
+
+        function unhighlight(e) {
+            dropZone.classList.remove('dragover');
+        }
+
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            handleFiles({ target: { files: files } });
+        }
+
+        function handleFiles(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            // Update drop zone text
+            dropZone.querySelector('p').textContent = `Selected: ${file.name}`;
+        }
+
+        function showLoading() {
+            loadingDialog.classList.add('active');
+            resultBox.style.display = 'none';
+        }
+
+        function hideLoading() {
+            loadingDialog.classList.remove('active');
+        }
+
+        function showError(message) {
+            resultBox.className = 'result-box error';
+            resultBox.style.display = 'block';
+            resultBox.innerHTML = `
+                <h3>❌ Error</h3>
+                <p>${message}</p>
+            `;
+        }
+
+        function showSuccess(data) {
+            resultBox.className = 'result-box success';
+            resultBox.style.display = 'block';
+            resultBox.innerHTML = `
+                <h3>✅ Document Uploaded Successfully</h3>
+                <p>Document has been registered on the blockchain.</p>
+                <p>Transaction ID: ${data.txId}</p>
+                <p>Hash: ${data.hash}</p>
+            `;
+
+            // Add to history
+            const historyItem = document.createElement('div');
+            historyItem.className = 'history-item';
+            historyItem.innerHTML = `
+                <h4>${document.getElementById('studentName').value}</h4>
+                <p>Type: ${document.getElementById('documentType').value}</p>
+                <p>Uploaded: ${new Date().toLocaleString()}</p>
+            `;
+            historyList.insertBefore(historyItem, historyList.firstChild);
+
+            // Reset form
+            uploadForm.reset();
+            dropZone.querySelector('p').textContent = 'Drag and drop your document here';
+        }
+
+        uploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const file = fileInput.files[0];
+            if (!file) {
+                showError('Please select a file to upload');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('document', file);
+            formData.append('studentName', document.getElementById('studentName').value);
+            formData.append('documentType', document.getElementById('documentType').value);
+            formData.append('description', document.getElementById('description').value);
+
+            // Show loading dialog
+            showLoading();
+
+            try {
+                const response = await fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showSuccess(data);
+                } else {
+                    showError(data.error || 'Failed to upload document');
+                }
+            } catch (error) {
+                showError('An error occurred while uploading the document');
+            } finally {
+                hideLoading();
+            }
+        });
+    </script>
+</body>
+</html> 

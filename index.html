@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Verification Escrow</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <div id="studentEscrow" class="escrow-section">
+            <h2>Student Escrow Details</h2>
+            <div class="escrow-info">
+                <p>Amount: <span id="studentAmount">0</span> ADA</p>
+                <p>Deadline: <span id="studentDeadline">-</span></p>
+                <p>Status: <span id="studentStatus">-</span></p>
+            </div>
+            <button id="claimPaymentBtn" class="btn btn-primary">Claim Payment</button>
+            <div id="studentMessage" class="message"></div>
+        </div>
+
+        <div id="clientEscrow" class="escrow-section">
+            <h2>Client Escrow Management</h2>
+            <div class="escrow-info">
+                <p>Student Address: <span id="studentAddress">-</span></p>
+                <p>Amount: <span id="clientAmount">0</span> ADA</p>
+                <p>Deadline: <span id="clientDeadline">-</span></p>
+            </div>
+            <div class="button-group">
+                <button id="createEscrowBtn" class="btn btn-primary">Create Escrow</button>
+                <button id="approveWorkBtn" class="btn btn-success">Approve Work</button>
+                <button id="claimRefundBtn" class="btn btn-danger">Claim Refund</button>
+            </div>
+            <div id="clientMessage" class="message"></div>
+        </div>
+    </div>
+    <script src="utils/common.js"></script>
+    <script src="utils/escrow.js"></script>
+    <script src="app.js"></script>
+</body>
+</html> 

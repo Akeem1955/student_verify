@@ -1,0 +1,10 @@
+name = "freelance-escrow"
+version = "0.1.0"
+description = "Freelance escrow system with platform fee management"
+license = "MIT"
+
+[profile]
+# Development profile
+[profile.dev]
+# Test profile
+[profile.test] 

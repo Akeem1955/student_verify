@@ -1,0 +1,12 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Scope of Changes
+- Only modify code within the specified component related to the reported bug.
+- Do not alter any other parts of the codebase unless explicitly instructed.
+
+# Preservation of Existing Functionality
+- Do not modify code that is functioning correctly.
+

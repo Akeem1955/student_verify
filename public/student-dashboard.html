@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Dashboard - Student Verification System</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        /* Additional styles to ensure proper layout */
+        .dashboard-container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 250px;
+            background-color: #1a1a1a;
+            color: white;
+            padding: 1rem;
+        }
+
+        .main-content {
+            flex: 1;
+            padding: 2rem;
+            background-color: #f5f5f5;
+        }
+
+        .nav-menu {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            margin-top: 2rem;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1rem;
+            color: #ffffff;
+            text-decoration: none;
+            border-radius: 0.5rem;
+            transition: background-color 0.2s;
+        }
+
+        .nav-link:hover, .nav-link.active {
+            background-color: #333333;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+
+        .stat-card {
+            background-color: white;
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .jobs-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+        }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(255,255,255,0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Add these styles to your existing styles */
+        .wallet-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .wallet-card h3 {
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .wallet-card .balance {
+            font-size: 2em;
+            font-weight: bold;
+            color: #1a237e;
+            margin: 10px 0;
+        }
+
+        .wallet-card .wallet-address {
+            color: #666;
+            font-size: 0.9em;
+            word-break: break-all;
+        }
+
+        .earnings-list {
+            margin-top: 20px;
+        }
+
+        .transaction-item {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .transaction-item.sent {
+            border-left: 4px solid #dc3545;
+        }
+
+        .transaction-item.received {
+            border-left: 4px solid #28a745;
+        }
+
+        .transaction-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .transaction-type {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 500;
+        }
+
+        .transaction-amount {
+            font-weight: 600;
+            font-size: 1.1em;
+        }
+
+        .transaction-amount.sent {
+            color: #dc3545;
+        }
+
+        .transaction-amount.received {
+            color: #28a745;
+        }
+
+        .transaction-details {
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .transaction-hash,
+        .transaction-timestamp,
+        .transaction-status {
+            margin: 5px 0;
+        }
+
+        .label {
+            font-weight: 500;
+            margin-right: 8px;
+        }
+
+        .transaction-status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+        }
+
+        .transaction-status.confirmed {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .transaction-status.pending {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+
+        .transaction-status.failed {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        .no-transactions {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
+        /* Add these styles for job cards */
+        .job-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 15px;
+        }
+
+        .job-card h3 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .job-details {
+            color: #666;
+            margin-bottom: 15px;
+        }
+
+        .job-amount {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #1a237e;
+            margin: 10px 0;
+        }
+
+        .job-status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            margin-top: 10px;
+        }
+
+        .job-status.active {
+            background-color: #e3f2fd;
+            color: #1565c0;
+        }
+
+        .job-status.completed {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .job-actions {
+            margin-top: 15px;
+        }
+
+        .btn-accept {
+            background-color: #4caf50;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .btn-accept:hover {
+            background-color: #388e3c;
+        }
+
+        .btn-accept:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>StudentFreelance</h2>
+            </div>
+            <nav class="nav-menu">
+                <a href="#dashboard" class="nav-link active">
+                    <i class="fas fa-home"></i>
+                    Dashboard
+                </a>
+                <a href="#jobs" class="nav-link">
+                    <i class="fas fa-briefcase"></i>
+                    Jobs
+                </a>
+                <a href="#earnings" class="nav-link">
+                    <i class="fas fa-wallet"></i>
+                    Earnings
+                </a>
+                <a href="#settings" class="nav-link">
+                    <i class="fas fa-cog"></i>
+                    Settings
+                </a>
+        </nav>
+        </aside>
+
+        <main class="main-content">
+            <section id="dashboard" class="section">
+                <div class="dashboard-header">
+            <div class="welcome-message">
+                        <h2>Welcome back, <span id="userName">Loading...</span></h2>
+                        <p>Here's an overview of your activity</p>
+                    </div>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value">0</div>
+                        <div class="stat-label">Active Jobs</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">0</div>
+                        <div class="stat-label">Completed Jobs</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">0 ADA</div>
+                        <div class="stat-label">Total Earnings</div>
+                    </div>
+                </div>
+
+                <div class="recent-jobs">
+                    <h3>Recent Jobs</h3>
+                    <div id="recentJobs" class="jobs-grid">
+                        <div class="loading">Loading recent jobs...</div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="jobs" class="section" style="display: none;">
+                <div class="section-header">
+                    <h2>Available Jobs</h2>
+                </div>
+                <div id="availableJobs" class="jobs-grid">
+                    <div class="loading">Loading available jobs...</div>
+                </div>
+
+                <div class="section-header">
+                    <h2>My Jobs</h2>
+                </div>
+                <div id="myJobs" class="jobs-grid">
+                    <div class="loading">Loading your jobs...</div>
+                </div>
+            </section>
+
+            <section id="earnings" class="section" style="display: none;">
+                <div class="section-header">
+                    <h2>Earnings Overview</h2>
+            </div>
+                <div class="wallet-card">
+                    <h3>Available Balance</h3>
+                    <p class="balance">0 ADA</p>
+                    <p class="wallet-address">Loading wallet address...</p>
+                </div>
+                <div class="earnings-history">
+                    <h3>Earnings History</h3>
+                    <div id="earningsList" class="earnings-list">
+                        <div class="loading">Loading earnings history...</div>
+                </div>
+            </div>
+        </section>
+
+            <section id="settings" class="section" style="display: none;">
+            <div class="section-header">
+                    <h2>Account Settings</h2>
+                </div>
+                <form id="settingsForm" class="settings-form">
+                    <div class="form-group">
+                        <label for="settingsWalletAddress">Wallet Address</label>
+                        <input type="text" id="settingsWalletAddress" name="walletAddress" required>
+            </div>
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="emailNotifications" name="emailNotifications">
+                            Receive email notifications
+                        </label>
+            </div>
+                    <button type="submit" class="btn-primary">Save Changes</button>
+                </form>
+        </section>
+        </main>
+            </div>
+
+    <div class="loading-overlay" style="display: none;">
+        <div class="spinner"></div>
+            </div>
+
+    <script type="module">
+        import EscrowManager from './js/escrow.js';
+        
+        // Initialize escrow manager
+        const escrowManager = new EscrowManager();
+        
+        // Dashboard state
+        const state = {
+            currentSection: 'dashboard',
+            stats: {
+                activeJobs: 0,
+                completedJobs: 0,
+                totalEarnings: 0
+            },
+            earnings: [],
+            settings: {
+                walletAddress: 'addr_test1qp2zaa5z74telpcag6dnxhle4gjl9j74660f8w0a00q0fwl0u42l9qnj0vz7dkvcs98vptzf7h27maqn5aa4k2amx08sqqqa9r',
+                emailNotifications: false
+            }
+        };
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', async () => {
+            await initializeDashboard();
+            setupEventListeners();
+        });
+
+        // Initialize dashboard
+        async function initializeDashboard() {
+            showLoading();
+            try {
+                // Load user profile
+                const userResponse = await fetch('/api/user/profile');
+                if (userResponse.ok) {
+                    const userData = await userResponse.json();
+                    document.getElementById('userName').textContent = `${userData.firstName} ${userData.lastName}`;
+                }
+
+                // Load wallet info
+                await loadWalletInfo();
+                
+                // Load section data
+                await loadSectionData('dashboard');
+            } catch (error) {
+                console.error('Error initializing dashboard:', error);
+                showError('Failed to initialize dashboard');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // Load wallet information
+        async function loadWalletInfo() {
+            try {
+                // Fetch balance from our server endpoint with the student's wallet address
+                const response = await fetch(`/api/wallet/balance/${state.settings.walletAddress}`);
+                
+                if (!response.ok) {
+                    throw new Error('Failed to fetch wallet balance');
+                }
+                
+                const data = await response.json();
+                
+                // Update balance display
+                document.querySelector('.wallet-card .balance').textContent = `${data.balance} ADA`;
+                
+                // Update wallet address display
+                document.querySelector('.wallet-card .wallet-address').textContent = state.settings.walletAddress;
+                
+                // Load transaction history for the student's wallet
+                const txResponse = await fetch(`/api/wallet/transactions/${state.settings.walletAddress}`);
+                
+                if (txResponse.ok) {
+                    const transactions = await txResponse.json();
+                    displayTransactions(transactions);
+                }
+            } catch (error) {
+                console.error('Error loading wallet info:', error);
+                // Set default values if loading fails
+                document.querySelector('.wallet-card .balance').textContent = '0 ADA';
+                document.querySelector('.wallet-card .wallet-address').textContent = state.settings.walletAddress;
+                document.getElementById('earningsList').innerHTML = '<div class="no-transactions">Failed to load transactions</div>';
+            }
+        }
+
+        // Display transactions
+        function displayTransactions(transactions) {
+            const earningsList = document.getElementById('earningsList');
+            
+            if (!transactions || transactions.length === 0) {
+                earningsList.innerHTML = '<div class="no-transactions">No transactions found</div>';
+                return;
+            }
+            
+            earningsList.innerHTML = transactions.map(tx => `
+                <div class="transaction-item ${tx.type}">
+                    <div class="transaction-info">
+                        <div class="transaction-header">
+                            <div class="transaction-type">
+                                <i class="fas ${tx.type === 'sent' ? 'fa-arrow-up' : 'fa-arrow-down'}"></i>
+                                ${tx.type === 'sent' ? 'Sent' : 'Received'}
+                            </div>
+                            <div class="transaction-amount ${tx.type}">
+                                ${tx.type === 'sent' ? '-' : '+'}${tx.amount} ADA
+                            </div>
+                        </div>
+                        <div class="transaction-details">
+                            <div class="transaction-hash">
+                                <span class="label">Transaction Hash:</span>
+                                <span class="value">${tx.hash}</span>
+                            </div>
+                            <div class="transaction-timestamp">
+                                <span class="label">Time:</span>
+                                <span class="value">${new Date(tx.timestamp * 1000).toLocaleString()}</span>
+                            </div>
+                            <div class="transaction-status ${tx.status.toLowerCase()}">
+                                <span class="label">Status:</span>
+                                <span class="value">${tx.status}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Setup event listeners
+        function setupEventListeners() {
+            // Navigation
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const section = e.currentTarget.getAttribute('href').substring(1);
+                    showSection(section);
+                });
+            });
+
+            // Settings form
+            document.getElementById('settingsForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const settings = {
+                    walletAddress: formData.get('walletAddress'),
+                    emailNotifications: formData.get('emailNotifications') === 'on'
+                };
+
+                try {
+                    showLoading();
+                    const response = await fetch('/api/profile', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(settings)
+                    });
+
+                    if (response.ok) {
+                        state.settings = settings;
+                        showSuccess('Settings updated successfully');
+                        await loadWalletInfo(); // Refresh wallet info
+                    } else {
+                        throw new Error('Failed to update settings');
+                    }
+                } catch (error) {
+                    console.error('Error updating settings:', error);
+                    showError('Failed to update settings');
+                } finally {
+                    hideLoading();
+                }
+            });
+        }
+
+        // Show section
+        function showSection(sectionId) {
+            document.querySelectorAll('.section').forEach(section => {
+                section.style.display = 'none';
+            });
+            document.getElementById(sectionId).style.display = 'block';
+            
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('active');
+            });
+            document.querySelector(`[href="#${sectionId}"]`).classList.add('active');
+            
+            state.currentSection = sectionId;
+            loadSectionData(sectionId);
+        }
+
+        // Load section data
+        async function loadSectionData(sectionId) {
+            showLoading();
+            try {
+                switch (sectionId) {
+                    case 'dashboard':
+                        await loadDashboardData();
+                        break;
+                    case 'jobs':
+                        await loadJobsData();
+                        break;
+                    case 'earnings':
+                        await loadWalletInfo();
+                        break;
+                    case 'settings':
+                        loadSettings();
+                        break;
+                }
+            } catch (error) {
+                console.error(`Error loading ${sectionId} data:`, error);
+                showError(`Failed to load ${sectionId} data`);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // Show loading overlay
+        function showLoading() {
+            document.querySelector('.loading-overlay').style.display = 'flex';
+        }
+
+        // Hide loading overlay
+        function hideLoading() {
+            document.querySelector('.loading-overlay').style.display = 'none';
+        }
+
+        // Show success message
+        function showSuccess(message) {
+            const successContainer = document.getElementById('errorMessages');
+            if (successContainer) {
+                const successMessageElement = document.createElement('div');
+                successMessageElement.className = 'success-message';
+                successMessageElement.textContent = message;
+                successContainer.appendChild(successMessageElement);
+                setTimeout(() => {
+                    successMessageElement.remove();
+                }, 5000);
+            }
+        }
+
+        // Show error message
+        function showError(message) {
+            const errorContainer = document.getElementById('errorMessages');
+            if (errorContainer) {
+                const errorMessageElement = document.createElement('div');
+                errorMessageElement.className = 'error-message';
+                errorMessageElement.textContent = message;
+                errorContainer.appendChild(errorMessageElement);
+                setTimeout(() => {
+                    errorMessageElement.remove();
+                }, 5000);
+            } else {
+                alert(message);
+            }
+        }
+
+        // Function to load dashboard data (stats and recent jobs)
+        async function loadDashboardData() {
+            try {
+                // Fetch available jobs
+                const availableJobsResponse = await fetch('/api/tasks/available');
+                const availableJobs = await availableJobsResponse.json();
+                
+                // Fetch my jobs
+                const myJobsResponse = await fetch('/api/tasks/my-jobs');
+                const myJobs = await myJobsResponse.json();
+                
+                // Update stats
+                const stats = {
+                    activeJobs: myJobs.filter(job => job.status === 'active').length,
+                    completedJobs: myJobs.filter(job => job.status === 'completed').length,
+                    totalEarnings: myJobs.reduce((total, job) => 
+                        job.status === 'completed' ? total + job.amount : total, 0
+                    )
+                };
+                
+                document.querySelector('.stats-grid .stat-card:nth-child(1) .stat-value').textContent = stats.activeJobs;
+                document.querySelector('.stats-grid .stat-card:nth-child(2) .stat-value').textContent = stats.completedJobs;
+                document.querySelector('.stats-grid .stat-card:nth-child(3) .stat-value').textContent = `${stats.totalEarnings} ADA`;
+                
+                // Display recent jobs
+                const recentJobs = [...myJobs].sort((a, b) => 
+                    new Date(b.assignedAt || b.createdAt) - new Date(a.assignedAt || a.createdAt)
+                ).slice(0, 5);
+                
+                const recentJobsContainer = document.getElementById('recentJobs');
+                if (recentJobs.length === 0) {
+                    recentJobsContainer.innerHTML = '<div class="no-jobs">No recent jobs</div>';
+                } else {
+                    recentJobsContainer.innerHTML = recentJobs.map(job => `
+                        <div class="job-card">
+                            <div class="job-header">
+                                <h3>${job.title}</h3>
+                                <span class="job-status ${job.status.toLowerCase()}">${job.status}</span>
+                            </div>
+                            <div class="job-details">
+                                <p>Client: ${job.clientName}</p>
+                                <p>Required Skills: ${job.requiredSkills.join(', ')}</p>
+                                <p class="job-amount">${job.amount} ADA</p>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('Error loading dashboard data:', error);
+                showError('Failed to load dashboard data.');
+            }
+        }
+
+        // Load jobs data
+        async function loadJobsData() {
+            try {
+                // Fetch available jobs
+                const availableJobsResponse = await fetch('/api/tasks/available');
+                const availableJobs = await availableJobsResponse.json();
+                displayAvailableJobs(availableJobs);
+                
+                // Fetch my jobs (accepted jobs)
+                const myJobsResponse = await fetch('/api/tasks/my-jobs');
+                const myJobs = await myJobsResponse.json();
+                displayMyJobs(myJobs);
+            } catch (error) {
+                console.error('Error loading jobs:', error);
+                showError('Failed to load jobs');
+            }
+        }
+
+        // Display available jobs
+        function displayAvailableJobs(jobs) {
+            const availableJobsContainer = document.getElementById('availableJobs');
+            
+            if (!jobs || jobs.length === 0) {
+                availableJobsContainer.innerHTML = '<div class="no-jobs">No available jobs found</div>';
+                return;
+            }
+            
+            availableJobsContainer.innerHTML = jobs.map(job => `
+                <div class="job-card">
+                    <div class="job-header">
+                        <h3>${job.title}</h3>
+                        <span class="job-status ${job.status.toLowerCase()}">${job.status}</span>
+                    </div>
+                    <div class="job-details">
+                        <p>${job.description}</p>
+                        <p>Client: ${job.clientName}</p>
+                        <p>Required Skills: ${job.requiredSkills.join(', ')}</p>
+                        <p class="job-amount">${job.amount} ADA</p>
+                    </div>
+                    <div class="job-actions">
+                        <button class="btn-accept" onclick="window.acceptJob('${job.id}')" ${job.status !== 'active' ? 'disabled' : ''}>
+                            Accept Job
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Make acceptJob function globally available
+        window.acceptJob = async function(jobId) {
+            try {
+                showLoading();
+                
+                // First accept the job
+                const acceptResponse = await fetch(`/api/tasks/${jobId}/accept`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+                
+                if (!acceptResponse.ok) {
+                    const errorData = await acceptResponse.json();
+                    throw new Error(errorData.error || 'Failed to accept job');
+                }
+                
+                const job = await acceptResponse.json();
+                
+                // Create escrow contract with automatic deduction using Aiken contract
+                const escrowResult = await escrowManager.createEscrow(
+                    job.clientId,
+                    'dev-user', // Using dev-user as default for development
+                    job.amount,
+                    true // Enable automatic deduction
+                );
+                
+                if (!escrowResult.success) {
+                    throw new Error(escrowResult.message || 'Failed to create escrow');
+                }
+
+                // Monitor escrow status
+                const checkStatus = async () => {
+                    const status = await escrowManager.getEscrowStatus(escrowResult.txHash);
+                    if (status.status === 'confirmed') {
+                        showSuccess('Job accepted and payment deducted successfully');
+                        await loadJobsData(); // Refresh jobs list
+                    } else if (status.status === 'failed') {
+                        throw new Error('Escrow creation failed');
+                    } else {
+                        // Check again after 5 seconds
+                        setTimeout(checkStatus, 5000);
+                    }
+                };
+
+                // Start monitoring escrow status
+                checkStatus();
+            } catch (error) {
+                console.error('Error accepting job:', error);
+                showError(error.message || 'Failed to accept job');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // Update completeJob function to use escrow
+        async function completeJob(jobId) {
+            try {
+                showLoading();
+                
+                // First mark the job as complete
+                const completeResponse = await fetch(`/api/tasks/${jobId}/complete`, {
+                    method: 'POST'
+                });
+                
+                if (!completeResponse.ok) {
+                    throw new Error('Failed to complete job');
+                }
+                
+                const job = await completeResponse.json();
+                
+                // Complete the escrow contract
+                const escrowResult = await escrowManager.completeEscrow(
+                    job.escrowTxHash,
+                    job.clientId,
+                    'dev-user' // Using dev-user as default for development
+                );
+                
+                showSuccess('Job marked as complete and escrow released');
+                await loadJobsData(); // Refresh jobs list
+            } catch (error) {
+                console.error('Error completing job:', error);
+                showError('Failed to complete job');
+            } finally {
+                hideLoading();
+            }
+        }
+        
+        // Add escrow status check to job display
+        function displayMyJobs(jobs) {
+            const myJobsContainer = document.getElementById('myJobs');
+            
+            if (!jobs || jobs.length === 0) {
+                myJobsContainer.innerHTML = '<div class="no-jobs">You haven\'t accepted any jobs yet</div>';
+                return;
+            }
+            
+            myJobsContainer.innerHTML = jobs.map(job => `
+                <div class="job-card">
+                    <div class="job-header">
+                        <h3>${job.title}</h3>
+                        <span class="job-status ${job.status.toLowerCase()}">${job.status}</span>
+                    </div>
+                    <div class="job-details">
+                        <p>${job.description}</p>
+                        <p>Client: ${job.clientName}</p>
+                        <p>Required Skills: ${job.requiredSkills.join(', ')}</p>
+                        <p class="job-amount">${job.amount} ADA</p>
+                        ${job.escrowTxHash ? `
+                            <p class="escrow-status">Escrow Status: <span id="escrow-status-${job.id}">Checking...</span></p>
+                        ` : ''}
+                    </div>
+                    ${job.status === 'active' ? `
+                        <div class="job-actions">
+                            <button class="btn-complete" onclick="completeJob('${job.id}')">
+                                Mark as Complete
+                            </button>
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('');
+            
+            // Check escrow status for each job
+            jobs.forEach(job => {
+                if (job.escrowTxHash) {
+                    checkEscrowStatus(job.id, job.escrowTxHash);
+                }
+            });
+        }
+        
+        // Function to check escrow status
+        async function checkEscrowStatus(jobId, txHash) {
+            try {
+                const status = await escrowManager.getEscrowStatus(txHash);
+                const statusElement = document.getElementById(`escrow-status-${jobId}`);
+                if (statusElement) {
+                    statusElement.textContent = status.status;
+                    statusElement.className = `escrow-status-${status.status.toLowerCase()}`;
+                }
+            } catch (error) {
+                console.error('Error checking escrow status:', error);
+            }
+        }
+    </script>
+</body>
+</html> 

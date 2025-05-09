@@ -1,0 +1,116 @@
+{
+  "preamble": {
+    "title": "contract/freelance_escrow",
+    "description": "Aiken contracts for project 'contract/freelance_escrow'",
+    "version": "0.0.0",
+    "plutusVersion": "v3",
+    "compiler": {
+      "name": "Aiken",
+      "version": "v1.1.16+23061c0"
+    },
+    "license": "Apache-2.0"
+  },
+  "validators": [
+    {
+      "title": "escrow.escrow.spend",
+      "datum": {
+        "title": "datum",
+        "schema": {
+          "$ref": "#/definitions/escrow~1EscrowDatum"
+        }
+      },
+      "redeemer": {
+        "title": "redeemer",
+        "schema": {
+          "$ref": "#/definitions/escrow~1EscrowRedeemer"
+        }
+      },
+      "compiledCode": "5901ea01010029800aba2aba1aab9faab9eaab9dab9a48888896600264653001300700198039804000cdc3a400530070024888966002600460106ea800e26466446644b30013003300d3754013132598009809000c4c8c966002600c00315980098089baa002802c590124566002601400315980098089baa002802c59012456600266e1d20040018acc004c044dd500140162c80922c807900f201e300f37540026022003164040601c6ea80262c8060566002600260166ea800a33001300c3754601c60186ea800a44646600200200644b30010018a508acc004cdc79bae30120010038a518998010011809800a01c40452300f3010301030103010301030103010301000198059baa300e300c375400e91114c004c04c0126eb8c048012446600a6eb0c010c048dd5001000a444b300130080048acc004cc00402c00a26464b3001300e001899b88375a602e6030603000a6eb4c05cc054dd50014566002601400314a114a2809901318099baa001301530133754602a60266ea8c054c058c058c058c058c058c058c058c04cdd5005c52820228acc004c0300122b3001330063758600a60266ea802cdd7180a801c4cc00402c00a294101144cc00402c009011202222c8050c03800cc030c034004dc3a400060126ea800e2c8038600e00260066ea801e29344d95900101",
+      "hash": "455bf4707fe6ddb55d11a1c3f0c69a502d010366114e08301f2ac954"
+    },
+    {
+      "title": "escrow.escrow.else",
+      "redeemer": {
+        "schema": {}
+      },
+      "compiledCode": "5901ea01010029800aba2aba1aab9faab9eaab9dab9a48888896600264653001300700198039804000cdc3a400530070024888966002600460106ea800e26466446644b30013003300d3754013132598009809000c4c8c966002600c00315980098089baa002802c590124566002601400315980098089baa002802c59012456600266e1d20040018acc004c044dd500140162c80922c807900f201e300f37540026022003164040601c6ea80262c8060566002600260166ea800a33001300c3754601c60186ea800a44646600200200644b30010018a508acc004cdc79bae30120010038a518998010011809800a01c40452300f3010301030103010301030103010301000198059baa300e300c375400e91114c004c04c0126eb8c048012446600a6eb0c010c048dd5001000a444b300130080048acc004cc00402c00a26464b3001300e001899b88375a602e6030603000a6eb4c05cc054dd50014566002601400314a114a2809901318099baa001301530133754602a60266ea8c054c058c058c058c058c058c058c058c04cdd5005c52820228acc004c0300122b3001330063758600a60266ea802cdd7180a801c4cc00402c00a294101144cc00402c009011202222c8050c03800cc030c034004dc3a400060126ea800e2c8038600e00260066ea801e29344d95900101",
+      "hash": "455bf4707fe6ddb55d11a1c3f0c69a502d010366114e08301f2ac954"
+    }
+  ],
+  "definitions": {
+    "Int": {
+      "dataType": "integer"
+    },
+    "aiken/crypto/VerificationKeyHash": {
+      "title": "VerificationKeyHash",
+      "dataType": "bytes"
+    },
+    "escrow/EscrowAction": {
+      "title": "EscrowAction",
+      "anyOf": [
+        {
+          "title": "ClaimRefund",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "ClaimPayment",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        },
+        {
+          "title": "ApproveWork",
+          "dataType": "constructor",
+          "index": 2,
+          "fields": []
+        }
+      ]
+    },
+    "escrow/EscrowDatum": {
+      "title": "EscrowDatum",
+      "anyOf": [
+        {
+          "title": "EscrowDatum",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "buyer",
+              "$ref": "#/definitions/aiken~1crypto~1VerificationKeyHash"
+            },
+            {
+              "title": "seller",
+              "$ref": "#/definitions/aiken~1crypto~1VerificationKeyHash"
+            },
+            {
+              "title": "amount",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "deadline",
+              "$ref": "#/definitions/Int"
+            }
+          ]
+        }
+      ]
+    },
+    "escrow/EscrowRedeemer": {
+      "title": "EscrowRedeemer",
+      "anyOf": [
+        {
+          "title": "EscrowRedeemer",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "action",
+              "$ref": "#/definitions/escrow~1EscrowAction"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

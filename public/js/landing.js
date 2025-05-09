@@ -132,18 +132,31 @@ const Landing = {
     },
 
     setupEventListeners() {
-        // Navigation buttons
-        this.elements.getStartedBtn?.addEventListener('click', () => {
-            window.location.href = 'login.html';
-        });
+        // Note: Event listeners for direct navigation are no longer needed
+        // since we're using <a> elements with href attributes
+        // This method is kept for potential future additional event handling
+        
+        // If there are any remaining button elements, ensure they redirect properly
+        const backupGetStartedBtn = document.querySelector('button.btn-primary');
+        if (backupGetStartedBtn) {
+            backupGetStartedBtn.addEventListener('click', () => {
+                window.location.href = 'login.html';
+            });
+        }
 
-        this.elements.studentBtn?.addEventListener('click', () => {
-            window.location.href = 'register.html?type=student';
-        });
+        const backupStudentBtn = document.querySelector('button.cta-buttons .btn-primary');
+        if (backupStudentBtn) {
+            backupStudentBtn.addEventListener('click', () => {
+                window.location.href = 'student-dashboard.html';
+            });
+        }
 
-        this.elements.clientBtn?.addEventListener('click', () => {
-            window.location.href = 'register.html?type=client';
-        });
+        const backupClientBtn = document.querySelector('button.cta-buttons .btn-secondary');
+        if (backupClientBtn) {
+            backupClientBtn.addEventListener('click', () => {
+                window.location.href = 'client-dashboard.html';
+            });
+        }
     },
 
     setupSmoothScroll() {

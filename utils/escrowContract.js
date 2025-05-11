@@ -1,4 +1,6 @@
 import { ForgeScript, Transaction } from '@meshsdk/core';
+import { readFileSync } from "fs";
+import { Lucid } from "lucid-cardano";
 
 // Initialize wallet with your configuration
 const wallet = {
@@ -166,5 +168,45 @@ const escrow = {
         }
     }
 };
+
+/**
+ * Loads the compiled Aiken contract from plutus.json and derives the script address using Lucid.
+ * Assumes Lucid is already initialized and passed as an argument.
+ * @param {Lucid} lucid - An initialized Lucid instance
+ * @returns {Promise<string>} - The script address derived from the Aiken contract
+ */
+export async function getAikenScriptAddress(lucid) {
+    // Load the compiled Aiken contract
+    const plutusJson = JSON.parse(readFileSync("./freelance_escrow/plutus.json", "utf8"));
+    // Find the validator (adjust the title if needed)
+    const validator = plutusJson.validators.find(v => v.title === "escrow.escrow.spend");
+    if (!validator) throw new Error("Validator not found in plutus.json");
+    // Get the CBOR code
+    const scriptCbor = validator.compiledCode;
+    // Create a Lucid script object
+    const script = {
+        type: "PlutusV2", // Use PlutusV3 as per your contract
+        script: scriptCbor,
+    };
+    // Derive the script address
+    return lucid.utils.validatorToAddress(script);
+}
+
+export async function getAikenScript(lucid) {
+    // Load the compiled Aiken contract
+    const plutusJson = JSON.parse(readFileSync("./freelance_escrow/plutus.json", "utf8"));
+    // Find the validator (adjust the title if needed)
+    const validator = plutusJson.validators.find(v => v.title === "escrow.escrow.spend");
+    if (!validator) throw new Error("Validator not found in plutus.json");
+    // Get the CBOR code
+    const scriptCbor = validator.compiledCode;
+    // Create a Lucid script object
+    const script = {
+        type: "PlutusV2", // Use PlutusV3 as per your contract
+        script: scriptCbor,
+    };
+    // Derive the script address
+    return script;
+}
 
 export default escrow; 

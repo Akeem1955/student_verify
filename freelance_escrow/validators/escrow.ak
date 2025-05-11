@@ -30,33 +30,28 @@ pub type EscrowDatum {
 
 // Redeemer for spending from the escrow
 pub type EscrowRedeemer {
-  action: EscrowAction,
+  action: Int,
 }
 
-// Possible actions that can be taken on the escrow
-pub type EscrowAction {
-  // Buyer can claim refund if deadline passed
-  ClaimRefund
-  // Seller can claim payment if buyer approves
-  ClaimPayment
-  // Buyer can approve the work and release payment
-  ApproveWork
-}
+
 
 validator escrow {
   spend(datum: Option<EscrowDatum>, redeemer: EscrowRedeemer, _utxo: OutputReference, tx: Transaction) {
     expect Some(EscrowDatum { buyer, seller, deadline, .. }) = datum
 
     when redeemer.action is {
-      ClaimRefund -> 
+      0 -> 
         // Buyer can claim refund if deadline has passed
         is_buyer_signed(tx, buyer) && is_deadline_passed(tx.validity_range, deadline)
-      ClaimPayment -> 
+      1 -> 
         // Seller can claim payment if buyer approves
         is_seller_signed(tx, seller) && is_buyer_signed(tx, buyer)
-      ApproveWork -> 
+      2 -> 
         // Buyer can approve the work and release payment
         is_buyer_signed(tx, buyer)
+      _ ->
+        is_buyer_signed(tx, buyer)
+            
     }
   }
 } 

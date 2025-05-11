@@ -765,6 +765,23 @@
             try {
                 showLoading();
                 
+                // First get the job details to ensure we have the correct amount
+                const jobResponse = await fetch(`/api/tasks/${jobId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+                
+                if (!jobResponse.ok) {
+                    throw new Error('Failed to fetch job details');
+                }
+                
+                const job = await jobResponse.json();
+                
+                if (!job.amount || typeof job.amount !== 'number') {
+                    throw new Error('Invalid job amount');
+                }
+                
                 // First accept the job
                 const acceptResponse = await fetch(`/api/tasks/${jobId}/accept`, {
                     method: 'POST',
@@ -778,72 +795,39 @@
                     throw new Error(errorData.error || 'Failed to accept job');
                 }
                 
-                const job = await acceptResponse.json();
-                
-                // Create escrow contract with automatic deduction using Aiken contract
-                const escrowResult = await escrowManager.createEscrow(
-                    job.clientId,
-                    'dev-user', // Using dev-user as default for development
-                    job.amount,
-                    true // Enable automatic deduction
-                );
-                
-                if (!escrowResult.success) {
-                    throw new Error(escrowResult.message || 'Failed to create escrow');
-                }
-
-                // Monitor escrow status
-                const checkStatus = async () => {
-                    const status = await escrowManager.getEscrowStatus(escrowResult.txHash);
-                    if (status.status === 'confirmed') {
-                        showSuccess('Job accepted and payment deducted successfully');
-                        await loadJobsData(); // Refresh jobs list
-                    } else if (status.status === 'failed') {
-                        throw new Error('Escrow creation failed');
-                    } else {
-                        // Check again after 5 seconds
-                        setTimeout(checkStatus, 5000);
-                    }
-                };
-
-                // Start monitoring escrow status
-                checkStatus();
+                // Show success dialog and update My Jobs
+                showSuccess('Job Accepted');
+                await loadJobsData(); // Refresh jobs list (includes My Jobs)
+                // Optionally, switch to the My Jobs section
+                showSection('jobs');
             } catch (error) {
                 console.error('Error accepting job:', error);
                 showError(error.message || 'Failed to accept job');
+                await loadJobsData();
             } finally {
                 hideLoading();
             }
         }
 
         // Update completeJob function to use escrow
-        async function completeJob(jobId) {
+        window.completeJob = async function(jobId) {
             try {
                 showLoading();
-                
-                // First mark the job as complete
+
+                // Mark the job as ready for review (completed_by_student)
                 const completeResponse = await fetch(`/api/tasks/${jobId}/complete`, {
                     method: 'POST'
                 });
-                
+
                 if (!completeResponse.ok) {
-                    throw new Error('Failed to complete job');
+                    throw new Error('Failed to mark job as complete');
                 }
-                
-                const job = await completeResponse.json();
-                
-                // Complete the escrow contract
-                const escrowResult = await escrowManager.completeEscrow(
-                    job.escrowTxHash,
-                    job.clientId,
-                    'dev-user' // Using dev-user as default for development
-                );
-                
-                showSuccess('Job marked as complete and escrow released');
+
+                showSuccess('Job marked as complete. Awaiting client approval.');
                 await loadJobsData(); // Refresh jobs list
             } catch (error) {
                 console.error('Error completing job:', error);
-                showError('Failed to complete job');
+                showError('Failed to mark job as complete');
             } finally {
                 hideLoading();
             }
@@ -862,7 +846,7 @@
                 <div class="job-card">
                     <div class="job-header">
                         <h3>${job.title}</h3>
-                        <span class="job-status ${job.status.toLowerCase()}">${job.status}</span>
+                        <span class="job-status ${getStatusClass(job.status)}">${getStatusText(job.status)}</span>
                     </div>
                     <div class="job-details">
                         <p>${job.description}</p>
@@ -873,13 +857,7 @@
                             <p class="escrow-status">Escrow Status: <span id="escrow-status-${job.id}">Checking...</span></p>
                         ` : ''}
                     </div>
-                    ${job.status === 'active' ? `
-                        <div class="job-actions">
-                            <button class="btn-complete" onclick="completeJob('${job.id}')">
-                                Mark as Complete
-                            </button>
-                        </div>
-                    ` : ''}
+                    ${getJobActions(job)}
                 </div>
             `).join('');
             
@@ -889,6 +867,60 @@
                     checkEscrowStatus(job.id, job.escrowTxHash);
                 }
             });
+        }
+        
+        function getStatusClass(status) {
+            switch(status) {
+                case 'active': return 'active';
+                case 'completed_by_student': return 'in-progress';
+                case 'completed': return 'completed';
+                case 'cancelled': return 'cancelled';
+                default: return 'active';
+            }
+        }
+        
+        function getStatusText(status) {
+            switch(status) {
+                case 'active': return 'In Progress';
+                case 'completed_by_student': return 'Awaiting Client Approval';
+                case 'completed': return 'Completed';
+                case 'cancelled': return 'Cancelled';
+                default: return status;
+            }
+        }
+        
+        function getJobActions(job) {
+            switch(job.status) {
+                case 'active':
+                    return `
+                        <div class="job-actions">
+                            <button class="btn-complete" onclick="completeJob('${job.id}')">
+                                Mark as Complete
+                            </button>
+                            <button class="btn-cancel" onclick="cancelJob('${job.id}')">
+                                Cancel Job
+                            </button>
+                        </div>
+                    `;
+                case 'completed_by_student':
+                    return `
+                        <div class="job-actions">
+                            <button class="btn-info" disabled>
+                                Waiting for Client Approval
+                            </button>
+                        </div>
+                    `;
+                case 'completed':
+                    return `
+                        <div class="job-actions">
+                            <button class="btn-success" disabled>
+                                Payment Received
+                            </button>
+                        </div>
+                    `;
+                default:
+                    return '';
+            }
         }
         
         // Function to check escrow status
@@ -902,6 +934,36 @@
                 }
             } catch (error) {
                 console.error('Error checking escrow status:', error);
+            }
+        }
+        
+        // Add function to cancel a job
+        async function cancelJob(jobId) {
+            if (confirm('Are you sure you want to cancel this job? This will return the funds to the client.')) {
+                try {
+                    showLoading();
+                    
+                    // First mark the job as cancelled
+                    const cancelResponse = await fetch(`/api/tasks/${jobId}/cancel`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('token')}`
+                        }
+                    });
+                    
+                    if (!cancelResponse.ok) {
+                        const errorData = await cancelResponse.json();
+                        throw new Error(errorData.error || 'Failed to cancel job');
+                    }
+                    
+                    showSuccess('Job cancelled successfully');
+                    await loadJobsData(); // Refresh jobs list
+                } catch (error) {
+                    console.error('Error cancelling job:', error);
+                    showError('Failed to cancel job: ' + error.message);
+                } finally {
+                    hideLoading();
+                }
             }
         }
     </script>

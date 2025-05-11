@@ -8,6 +8,12 @@ class EscrowManager {
     // Create an escrow contract using Aiken contract
     async createEscrow(clientId, studentId, amount, autoDeduct = false) {
         try {
+            console.log('Creating escrow with amount:', amount);
+            // Validate amount
+            // if (!amount || typeof amount !== 'number' || amount <= 0) {
+            //     throw new Error('Invalid amount provided');
+            // }
+
             const response = await fetch('/api/escrow', {
                 method: 'POST',
                 headers: {
@@ -17,7 +23,7 @@ class EscrowManager {
                 body: JSON.stringify({
                     clientId,
                     studentId,
-                    amount,
+                    amount: Number(amount), // Ensure amount is a number
                     autoDeduct
                 })
             });
@@ -79,6 +85,37 @@ class EscrowManager {
             return {
                 success: false,
                 message: error.message || 'Failed to complete escrow contract'
+            };
+        }
+    }
+    
+    // Cancel an escrow contract
+    async cancelEscrow(txHash) {
+        try {
+            const response = await fetch(`/api/escrow/${txHash}/cancel`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                }
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || 'Failed to cancel escrow contract');
+            }
+
+            const result = await response.json();
+            return {
+                success: true,
+                txHash: result.txHash,
+                message: 'Escrow contract cancelled successfully, funds returned to client'
+            };
+        } catch (error) {
+            console.error('Error cancelling escrow:', error);
+            return {
+                success: false,
+                message: error.message || 'Failed to cancel escrow contract'
             };
         }
     }

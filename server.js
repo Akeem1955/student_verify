@@ -6,7 +6,7 @@ import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { Blockfrost, Lucid, Data } from 'lucid-cardano';
+import { Blockfrost, Lucid, Data, toHex, Constr} from 'lucid-cardano';
 import { BlockFrostAPI } from '@blockfrost/blockfrost-js';
 import NodeCache from 'node-cache';
 import jwt from 'jsonwebtoken';
@@ -17,6 +17,7 @@ import { createLogger, format, transports } from 'winston';
 import rateLimit from 'express-rate-limit';
 import { logger, stream } from './config/logger.js';
 import escrow from './utils/escrowContract.js';
+import { getAikenScriptAddress,getAikenScript } from './utils/escrowContract.js';
 
 // Custom API Error class
 class APIError extends Error {
@@ -507,7 +508,7 @@ const tasks = new Map(); // Initialize tasks storage
 // Add default development profiles
 if (process.env.NODE_ENV === 'development') {
     const devUser = {
-        id: 'dev-user',
+        id: 'dev-student',
         email: 'dev@example.com',
         firstName: 'Akeem',
         lastName: 'Adetunji',
@@ -525,11 +526,11 @@ if (process.env.NODE_ENV === 'development') {
     };
 
     // Add to users Map
-    users.set('dev-user', devUser);
+    users.set('dev-student', devUser);
     users.set('dev-client', devClient);
 
     // Add to userProfiles Map
-    userProfiles.set('dev-user', {
+    userProfiles.set('dev-student', {
         ...devUser,
         university: 'Test University',
         studentId: 'DEV123',
@@ -558,9 +559,10 @@ function generateToken() {
 const authenticateToken = (req, res, next) => {
     // Skip authentication in development mode
     if (process.env.NODE_ENV === 'development') {
-        console.log('Development mode: Skipping authentication');
+        // Detect if this is a client or student dashboard/API call
+        // For now, always set to dev-client for client dashboard testing
         req.user = {
-            id: 'dev-user',
+            id: 'dev-client',
             role: 'client',
             firstName: 'John',
             lastName: 'Doe'
@@ -964,23 +966,45 @@ app.post('/api/tasks', authenticateToken, async (req, res) => {
 
 app.post('/api/tasks/:taskId/cancel', authenticateToken, async (req, res) => {
     try {
-        const tasks = JSON.parse(fs.readFileSync('data/tasks.json', 'utf8'));
-        const taskIndex = tasks.tasks.findIndex(t => t.id === req.params.taskId);
+        const tasksData = JSON.parse(fs.readFileSync('data/tasks.json', 'utf8'));
+        const taskIndex = tasksData.tasks.findIndex(t => t.id === req.params.taskId);
         
         if (taskIndex === -1) {
             return res.status(404).json({ error: 'Task not found' });
         }
         
-        if (tasks.tasks[taskIndex].clientId !== req.user.id) {
+        const task = tasksData.tasks[taskIndex];
+        
+        // Check authorization: Either the client who posted the task or the student who accepted it
+        const isClient = task.clientId === req.user.id;
+        const isStudent = task.assignedTo === req.user.id;
+        
+        if (!isClient && !isStudent) {
             return res.status(403).json({ error: 'Not authorized to cancel this task' });
         }
         
-        tasks.tasks[taskIndex].status = 'cancelled';
-        tasks.tasks[taskIndex].cancelledAt = new Date().toISOString();
+        // If task has an associated escrow transaction, cancel it
+        if (task.escrowTxHash) {
+            try {
+                const result = await cancelEscrowContract(task.escrowTxHash, task.clientId);
+                // Store the cancellation transaction hash
+                task.refundTxHash = result.txHash;
+            } catch (escrowError) {
+                console.error('Error cancelling escrow:', escrowError);
+                // Continue with task cancellation even if escrow cancellation fails
+                // This ensures the task status is updated in our system
+            }
+        }
         
-        fs.writeFileSync('data/tasks.json', JSON.stringify(tasks, null, 2));
+        // Update task status
+        task.status = 'cancelled';
+        task.cancelledAt = new Date().toISOString();
+        task.cancelledBy = req.user.id;
         
-        res.json(tasks.tasks[taskIndex]);
+        // Write updated tasks back to file
+        fs.writeFileSync('data/tasks.json', JSON.stringify(tasksData, null, 2));
+        
+        res.json(task);
     } catch (error) {
         console.error('Error cancelling task:', error);
         res.status(500).json({ error: 'Failed to cancel task' });
@@ -989,23 +1013,86 @@ app.post('/api/tasks/:taskId/cancel', authenticateToken, async (req, res) => {
 
 app.post('/api/tasks/:taskId/complete', authenticateToken, async (req, res) => {
     try {
-        const tasks = JSON.parse(fs.readFileSync('data/tasks.json', 'utf8'));
-        const taskIndex = tasks.tasks.findIndex(t => t.id === req.params.taskId);
+        console.log('Completing task:', req.params.taskId);
+        // Read tasks from file
+        const tasksData = JSON.parse(fs.readFileSync('data/tasks.json', 'utf8'));
+        
+        // Find the task
+        const taskIndex = tasksData.tasks.findIndex(t => t.id === req.params.taskId);
+        console.log('Task index:', taskIndex);
         
         if (taskIndex === -1) {
             return res.status(404).json({ error: 'Task not found' });
         }
         
-        if (tasks.tasks[taskIndex].clientId !== req.user.id) {
+        const task = tasksData.tasks[taskIndex];
+        console.log('Is Task null Task:', task);
+        
+        // Check if task is assigned to someone
+        if (!task.assignedTo) {
+            console.log('Task is not assigned to anyone');
+            return res.status(400).json({ error: 'Task is not assigned to anyone' });
+        }
+        
+        const isClient = task.clientId === 'dev-client';
+        const isStudent = task.assignedTo === 'dev-student';
+        
+        if (!isClient && !isStudent) {
             return res.status(403).json({ error: 'Not authorized to complete this task' });
         }
         
-        tasks.tasks[taskIndex].status = 'completed';
-        tasks.tasks[taskIndex].completedAt = new Date().toISOString();
-        
-        fs.writeFileSync('data/tasks.json', JSON.stringify(tasks, null, 2));
-        
-        res.json(tasks.tasks[taskIndex]);
+        // Different logic based on who is marking the task as complete
+        if (isStudent) {
+            // Student marks the task as ready for review
+            if (task.status === 'active') {
+                task.status = 'completed_by_student';
+                task.completedByStudentAt = new Date().toISOString();
+                
+                // Write updated tasks back to file
+                fs.writeFileSync('data/tasks.json', JSON.stringify(tasksData, null, 2));
+                
+                return res.json(task);
+            } 
+        }
+        if (isClient) {
+            // Client approves and finalizes the task
+            if (task.status === 'completed_by_student') {
+                // If task has an escrow transaction, complete it
+                if (task.escrowTxHash) {
+                    try {
+                        console.log('ClientId ',task.clientId)
+                        console.log('AssignedTo ',task.assignedTo)
+                        const result = await completeEscrowContract(
+                            task.escrowTxHash, 
+                            task.clientId, 
+                            task.assignedTo
+                        );
+                        // Store the completion transaction hash
+                        task.paymentTxHash = result.txHash;
+                    } catch (escrowError) {
+                        console.error('Error completing escrow:', escrowError);
+                        return res.status(500).json({ 
+                            error: 'Failed to release payment', 
+                            details: escrowError.message 
+                        });
+                    }
+                }
+                
+                // Update task status
+                task.status = 'completed';
+                task.completedAt = new Date().toISOString();
+                
+                // Write updated tasks back to file
+                fs.writeFileSync('data/tasks.json', JSON.stringify(tasksData, null, 2));
+                
+                res.json(task);
+            } else {
+                return res.status(400).json({ 
+                    error: 'Task must be marked as completed by student first',
+                    status: task.status
+                });
+            }
+        }
     } catch (error) {
         console.error('Error completing task:', error);
         res.status(500).json({ error: 'Failed to complete task' });
@@ -1230,20 +1317,25 @@ async function createEscrowContract(clientId, studentId, amount, autoDeduct) {
             throw new APIError('Blockchain connection not initialized', 500, 'BLOCKCHAIN_ERROR');
         }
 
+        // Validate amount
+        if (!amount || typeof amount !== 'number' || amount <= 0) {
+            throw new APIError('Invalid amount provided', 400, 'INVALID_AMOUNT');
+        }
+
         let clientProfile;
         let studentProfile;
 
         if (process.env.NODE_ENV === 'development') {
             // Use mock profiles in development mode
             clientProfile = {
-                id: 'dev-user',
+                id: 'dev-client',
                 cardanoAddress: 'addr_test1qrk47v4t4xlywf3eh8ae7s54s354k86c6rh8mu8utzm22ky28mcycq87r9qef4gdm8555ft8valqhxkgx3uypyt0v3lqsmpkfu',
                 name: 'Akeem Adetunji'
             };
             studentProfile = {
-                id: 'dev-user',
-                cardanoAddress: 'addr_test1qrk47v4t4xlywf3eh8ae7s54s354k86c6rh8mu8utzm22ky28mcycq87r9qef4gdm8555ft8valqhxkgx3uypyt0v3lqsmpkfu',
-                name: 'Akeem Adetunji'
+                id: 'dev-student',
+                cardanoAddress: 'addr_test1qp2zaa5z74telpcag6dnxhle4gjl9j74660f8w0a00q0fwl0u42l9qnj0vz7dkvcs98vptzf7h27maqn5aa4k2amx08sqqqa9r',
+                name: 'Azeem Adetunji'
             };
         } else {
             clientProfile = userProfiles.get(clientId);
@@ -1281,45 +1373,50 @@ async function createEscrowContract(clientId, studentId, amount, autoDeduct) {
         const sellerVkh = sellerBase.payment_cred().to_keyhash().to_bytes();
 
         // Create escrow datum matching on-chain type - EXACTLY as in the Aiken contract
-        const deadline = BigInt(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days from now
+        const deadline = (Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days from now
         
         // Debug logging
         console.log('Data types for serialization:');
+        console.log('buyer:', buyerVkh);
+        console.log('seller:', sellerVkh);
         console.log('- buyer:', typeof buyerVkh, buyerVkh instanceof Uint8Array);
         console.log('- seller:', typeof sellerVkh, sellerVkh instanceof Uint8Array);
-        console.log('- amount:', typeof BigInt(amount));
+        console.log('- amount:', typeof amount, amount);
         console.log('- deadline:', typeof deadline);
         
         try {
-            // Validate ESCROW_VALIDATOR_ADDRESS
-            if (!ESCROW_VALIDATOR_ADDRESS) {
-                throw new Error('ESCROW_VALIDATOR_ADDRESS environment variable is not defined');
-            }
-            
-            console.log('Using escrow validator address:', ESCROW_VALIDATOR_ADDRESS);
+            // Derive the script address from the compiled Aiken contract
+            const scriptAddress = await getAikenScriptAddress(lucid);
+            console.log('Using derived Aiken script address:', scriptAddress);
             
             // Convert byte arrays to hex strings for serialization
-            const buyerHex = Buffer.from(buyerVkh).toString('hex');
-            const sellerHex = Buffer.from(sellerVkh).toString('hex');
+            const buyerHex = toHex(buyerVkh);
+            const sellerHex = toHex(sellerVkh);
             
-            console.log('Converted key hashes to hex:');
-            console.log('- buyerHex:', buyerHex);
-            console.log('- sellerHex:', sellerHex);
+            // Ensure amount is a BigInt
+            const amountBigInt = BigInt(Math.floor(amount));
             
-            // Following the Aiken contract structure for EscrowDatum
-            const datum = {
-                buyer: buyerHex,
-                seller: sellerHex,
-                amount: amount,
-                deadline: deadline.toString()
-            };
+            let jolly = new Constr(0, [
+                buyerHex,
+                sellerHex,
+                5000000n,
+                BigInt(deadline)
+            ]);
             
-            console.log('Created datum:', JSON.stringify(datum));
+            console.log('Created datum with amount:', amountBigInt.toString());
             
-            // Create and submit transaction with simpler method
+            const datum = Data.to(jolly);
+            
+            console.log('Created datum:', datum);
+            
+            // Create and submit transaction using payToContract with inline datum
             const tx = await lucid
                 .newTx()
-                .attachMetadata(0, datum) // Attach datum as metadata for simplicity
+                .payToContract(
+                    scriptAddress,
+                    { inline: datum },
+                    { lovelace: 5000000n }
+                )
                 .complete();
 
             try {
@@ -1328,11 +1425,6 @@ async function createEscrowContract(clientId, studentId, amount, autoDeduct) {
 
                 console.log('Successfully submitted transaction:', txHash);
                 
-                // Start monitoring transaction in the background
-                monitorTransaction(txHash, async (status) => {
-                    console.log(`Transaction ${txHash} status: ${status}`);
-                });
-
                 return {
                     success: true,
                     txHash,
@@ -1343,7 +1435,6 @@ async function createEscrowContract(clientId, studentId, amount, autoDeduct) {
                 };
             } catch (txError) {
                 console.error('Transaction submission error:', txError);
-                // Extract the useful error message from the error object
                 const errorMessage = txError.info || txError.message || 'Unknown transaction error';
                 
                 throw new APIError(
@@ -1381,49 +1472,56 @@ async function completeEscrowContract(txHash, clientId, studentId) {
         if (!lucid) {
             throw new APIError('Blockchain connection not initialized', 500, 'BLOCKCHAIN_ERROR');
         }
-
+        console.log('Client Profile:', clientId);
+        console.log('Student Profile:', studentId);
+        console.log('User Profiles:', userProfiles);
+        console.log('Client ID:', clientId);
+        console.log('Student ID:', studentId);
         const clientProfile = userProfiles.get(clientId);
         const studentProfile = userProfiles.get(studentId);
+       
 
         if (!clientProfile || !studentProfile) {
             throw new APIError('User profiles not found', 404, 'PROFILE_NOT_FOUND');
         }
 
-        // Create redeemer
-        // Using Data constructors directly for the EscrowRedeemer with ApproveWork action
+        // --- Use Aiken script address and proper redeemer ---
         try {
-            // Validate that ESCROW_VALIDATOR_ADDRESS is defined
-            if (!ESCROW_VALIDATOR_ADDRESS) {
-                throw new Error('ESCROW_VALIDATOR_ADDRESS is not defined in environment variables');
-            }
-            
-            console.log('Using contract address:', ESCROW_VALIDATOR_ADDRESS);
-            
-            // First validate that the address is valid
-            const validatedAddress = await lucid.utils.validatorToAddress(ESCROW_VALIDATOR_ADDRESS);
-            console.log('Validated contract address:', validatedAddress);
-            
-            // Use a simple string-based redeemer that can be easily serialized
-            const redeemer = { action: "ApproveWork" };
-            
-            console.log('Created simple redeemer:', JSON.stringify(redeemer));
-            
+            // Derive the script address from the compiled Aiken contract
+            const scriptAddress = await getAikenScriptAddress(lucid);
+            console.log('Using derived Aiken script address (complete):', scriptAddress);
+            const aikenScript = await getAikenScript(lucid);
+            console.log('Using derived Aiken script (complete):', aikenScript);
+
+            // Construct the ApproveWork redeemer as a Constr (index 0, field: ApproveWork action, index 2)
+            // EscrowRedeemer(EscrowAction.ApproveWork)
+            const redeemer = Data.to(new Constr(0, [BigInt(2)]));
+        
+            const scriptUtxo = await lucid.utxosAt(scriptAddress);
+            console.log('Created ApproveWork redeemer:', redeemer);
+            console.log('Script Utxo datum:', scriptUtxo);
+        
+
+
+            // TODO: Retrieve studentAmount and platformFee for this escrow (not available in current signature)
+            // For now, use placeholders or fetch from DB/UTXO as needed
+            // const studentAmount = ...;
+            // const platformFee = ...;
+
             // Create and submit transaction
             const tx = await lucid
                 .newTx()
-                .spendFromContract(validatedAddress, { inline: redeemer })
-                .payToAddress(studentProfile.cardanoAddress, { lovelace: BigInt(studentAmount) })
-                .payToAddress(process.env.PLATFORM_WALLET_ADDRESS, { lovelace: BigInt(platformFee) })
+                .collectFrom(scriptUtxo,redeemer)
+                .attachSpendingValidator(aikenScript)
+                //.payToAddress(studentProfile.cardanoAddress, { lovelace:100n })
+                // .payToAddress(process.env.PLATFORM_WALLET_ADDRESS, { lovelace: BigInt(platformFee) })
                 .complete();
 
             const signedTx = await tx.sign().complete();
             const newTxHash = await signedTx.submit();
 
             // Start monitoring transaction
-            await monitorTransaction(newTxHash, async (status) => {
-                logger.info(`Escrow completion transaction ${newTxHash} status: ${status}`);
-            });
-
+           
             return {
                 txHash: newTxHash,
                 status: TransactionStatus.PENDING
@@ -1443,6 +1541,72 @@ async function completeEscrowContract(txHash, clientId, studentId) {
             'Failed to complete escrow contract',
             500,
             'ESCROW_COMPLETION_FAILED',
+            { details: error.message }
+        );
+    }
+}
+
+// Enhanced escrow cancellation with transaction monitoring (refunds to client)
+async function cancelEscrowContract(txHash, clientId) {
+    try {
+        if (!lucid) {
+            throw new APIError('Blockchain connection not initialized', 500, 'BLOCKCHAIN_ERROR');
+        }
+
+        const clientProfile = userProfiles.get(clientId);
+
+        if (!clientProfile) {
+            throw new APIError('Client profile not found', 404, 'PROFILE_NOT_FOUND');
+        }
+
+        try {
+            // Derive the script address from the compiled Aiken contract
+            const scriptAddress = await getAikenScriptAddress(lucid);
+            console.log('Using derived Aiken script address (cancel):', scriptAddress);
+
+            // Construct the ClaimRefund redeemer as a Constr (index 0, field: ClaimRefund action, index 0)
+            // EscrowRedeemer(EscrowAction.ClaimRefund)
+            const redeemer = new Constr(0, [new Constr(0, [])]);
+            console.log('Created ClaimRefund redeemer:', redeemer);
+
+            // TODO: Retrieve amount for this escrow (not available in current signature)
+            // For now, use placeholder or fetch from DB/UTXO as needed
+            // const amount = ...;
+
+            // Create and submit transaction to refund the client
+            const tx = await lucid
+                .newTx()
+                .spendFromContract(scriptAddress, { inline: redeemer })
+                // .payToAddress(clientProfile.cardanoAddress, { lovelace: BigInt(amount) })
+                .complete();
+
+            const signedTx = await tx.sign().complete();
+            const newTxHash = await signedTx.submit();
+
+            // Start monitoring transaction
+            await monitorTransaction(newTxHash, async (status) => {
+                logger.info(`Escrow cancellation transaction ${newTxHash} status: ${status}`);
+            });
+
+            return {
+                txHash: newTxHash,
+                status: TransactionStatus.PENDING
+            };
+        } catch (error) {
+            console.error('Redeemer serialization error:', error);
+            throw new APIError(
+                'Failed to cancel escrow contract - redeemer error',
+                500,
+                'ESCROW_REDEEMER_ERROR',
+                { details: error.message }
+            );
+        }
+    } catch (error) {
+        logger.error('Error cancelling escrow contract:', error);
+        throw new APIError(
+            'Failed to cancel escrow contract',
+            500,
+            'ESCROW_CANCELLATION_FAILED',
             { details: error.message }
         );
     }
@@ -1523,6 +1687,17 @@ app.post('/api/escrow/:txHash/complete', authenticateToken, async (req, res) => 
     } catch (error) {
         console.error('Error completing escrow:', error);
         res.status(500).json({ error: 'Failed to complete escrow contract' });
+    }
+});
+
+// Endpoint for cancelling escrow contract - returns funds to client
+app.post('/api/escrow/:txHash/cancel', authenticateToken, async (req, res) => {
+    try {
+        const result = await cancelEscrowContract(req.params.txHash, req.user.id);
+        res.json(result);
+    } catch (error) {
+        console.error('Error cancelling escrow:', error);
+        res.status(500).json({ error: 'Failed to cancel escrow contract' });
     }
 });
 
@@ -1757,7 +1932,7 @@ app.get('/api/tasks/my-jobs', async (req, res) => {
         
         // Filter tasks assigned to the current student
         const myTasks = tasksData.tasks.filter(task => 
-            task.assignedTo === 'dev-user' // Using dev-user as default for development
+            task.assignedTo === 'dev-student' // Use dev-student for the current student
         );
         
         // Get client names for each task and map budget to amount
@@ -1801,8 +1976,8 @@ app.post('/api/tasks/:taskId/accept', authenticateToken, async (req, res) => {
         // --- NEW: Attempt to create escrow contract before assigning ---
         try {
             // Use mock data for dev, or real IDs in production
-            const clientId = task.clientId || 'dev-user';
-            const studentId = req.user.id || 'dev-user';
+            const clientId = 'dev-client'; // Always use dev-client in development
+            const studentId = 'dev-student'; // Always use dev-student in development
             const amount = task.budget || task.amount;
             const autoDeduct = true;
 
@@ -1813,7 +1988,7 @@ app.post('/api/tasks/:taskId/accept', authenticateToken, async (req, res) => {
             }
 
             // Assign task to student only if escrow succeeded
-            task.assignedTo = req.user.id;
+            task.assignedTo = 'dev-student'; // Use dev-student instead of req.user.id
             task.assignedAt = new Date().toISOString();
             task.escrowTxHash = escrowResult.txHash; // Save txHash for reference
 
@@ -1828,40 +2003,6 @@ app.post('/api/tasks/:taskId/accept', authenticateToken, async (req, res) => {
     } catch (error) {
         console.error('Error accepting task:', error);
         res.status(500).json({ error: 'Failed to accept task' });
-    }
-});
-
-// Complete a job
-app.post('/api/tasks/:taskId/complete', authenticateToken, async (req, res) => {
-    try {
-        // Read tasks from file
-        const tasksData = JSON.parse(fs.readFileSync('data/tasks.json', 'utf8'));
-        
-        // Find the task
-        const taskIndex = tasksData.tasks.findIndex(t => t.id === req.params.taskId);
-        
-        if (taskIndex === -1) {
-            return res.status(404).json({ error: 'Task not found' });
-        }
-        
-        const task = tasksData.tasks[taskIndex];
-        
-        // Check if task is assigned to the student
-        if (task.assignedTo !== req.user.id) {
-            return res.status(403).json({ error: 'Not authorized to complete this task' });
-        }
-        
-        // Update task status
-        task.status = 'completed';
-        task.completedAt = new Date().toISOString();
-        
-        // Write updated tasks back to file
-        fs.writeFileSync('data/tasks.json', JSON.stringify(tasksData, null, 2));
-        
-        res.json(task);
-    } catch (error) {
-        console.error('Error completing task:', error);
-        res.status(500).json({ error: 'Failed to complete task' });
     }
 });
 
@@ -2062,3 +2203,80 @@ app.get('/api/blockchain/tx/:txHash', async (req, res) => {
         });
     }
 }); 
+
+// Get a single task by ID
+app.get('/api/tasks/:taskId', authenticateToken, async (req, res) => {
+    try {
+        // Read tasks from file
+        const tasksData = JSON.parse(fs.readFileSync('data/tasks.json', 'utf8'));
+        
+        // Find the task
+        const task = tasksData.tasks.find(t => t.id === req.params.taskId);
+        
+        if (!task) {
+            return res.status(404).json({ error: 'Task not found' });
+        }
+        
+        // Map budget to amount for consistency
+        const taskWithAmount = {
+            ...task,
+            amount: task.budget // Map budget to amount
+        };
+        
+        res.json(taskWithAmount);
+    } catch (error) {
+        console.error('Error fetching task:', error);
+        res.status(500).json({ error: 'Failed to fetch task' });
+    }
+});
+
+// Document upload endpoint for admin dashboard
+app.post('/api/upload', upload.single('document'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No file uploaded' });
+        }
+        const { studentName, documentType, description } = req.body;
+        if (!studentName || !documentType) {
+            return res.status(400).json({ error: 'Missing required fields' });
+        }
+        // Calculate hash
+        const hash = calculateHash(req.file.path);
+        // Store hash and metadata on Cardano
+        const metadata = {
+            studentName,
+            documentType,
+            description: description || ''
+        };
+        const result = await storeHashOnCardano(hash, metadata);
+        res.json({ success: true, txId: result.tx_hash, hash });
+    } catch (error) {
+        console.error('Error uploading document:', error);
+        res.status(500).json({ error: error.message || 'Failed to upload document' });
+    }
+});
+
+// Document verification endpoint for verify page
+app.post('/api/verify', upload.single('document'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No file uploaded' });
+        }
+        // Calculate hash
+        const hash = calculateHash(req.file.path);
+        // Verify hash on Cardano
+        const result = await verifyHashOnCardano(hash);
+        if (result.found) {
+            res.json({ verified: true, hash, metadata: {
+                student: result.student,
+                type: result.type,
+                timestamp: result.timestamp
+            }});
+        } else {
+            res.json({ verified: false, hash });
+        }
+    } catch (error) {
+        console.error('Error verifying document:', error);
+        res.status(500).json({ error: error.message || 'Failed to verify document' });
+    }
+});

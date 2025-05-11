@@ -244,6 +244,60 @@
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
+        
+        /* Loading overlay */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        
+        .spinner {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #1a237e;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Alert styles */
+        .alert {
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+        
+        .alert-success {
+            background-color: #e8f5e9;
+            color: #388e3c;
+            border: 1px solid #c8e6c9;
+        }
+        
+        .alert-error {
+            background-color: #ffebee;
+            color: #d32f2f;
+            border: 1px solid #ffcdd2;
+        }
+        
+        .alert-info {
+            background-color: #e3f2fd;
+            color: #1976d2;
+            border: 1px solid #bbdefb;
+        }
 
         @media (max-width: 768px) {
             .dashboard-container {
@@ -252,151 +306,9 @@
 
             .sidebar {
                 width: 100%;
-                padding: 10px;
+                max-height: 200px;
+                overflow-y: auto;
             }
-
-            .nav-menu {
-                display: flex;
-                overflow-x: auto;
-                padding-bottom: 10px;
-            }
-
-            .nav-menu li {
-                white-space: nowrap;
-            }
-
-            .main-content {
-                padding: 15px;
-            }
-
-            .stats-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        .no-tasks {
-            text-align: center;
-            padding: 20px;
-            color: #666;
-            font-style: italic;
-        }
-
-        .send-ada-form {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            margin: 20px 0;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-
-        .send-ada-form h3 {
-            margin-bottom: 20px;
-            color: #1a237e;
-        }
-
-        .transaction-item {
-            background: white;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 10px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-
-        .transaction-item .amount {
-            font-weight: bold;
-        }
-
-        .transaction-item .amount.sent {
-            color: #d32f2f;
-        }
-
-        .transaction-item .amount.received {
-            color: #388e3c;
-        }
-
-        .transaction-item .timestamp {
-            color: #666;
-            font-size: 0.9em;
-        }
-
-        /* Add styles for send ADA form */
-        .send-ada-form {
-            background: white;
-            padding: 1.5rem;
-            border-radius: 0.5rem;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            margin: 1rem 0;
-        }
-
-        .send-ada-form h3 {
-            margin-bottom: 1rem;
-        }
-
-        .form-group {
-            margin-bottom: 1rem;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 0.5rem;
-            font-weight: 500;
-        }
-
-        .form-group input {
-            width: 100%;
-            padding: 0.75rem;
-            border: 1px solid #ddd;
-            border-radius: 0.25rem;
-            font-size: 1rem;
-        }
-
-        .btn-primary {
-            background-color: #3498db;
-            color: white;
-            padding: 0.75rem 1.5rem;
-            border: none;
-            border-radius: 0.25rem;
-            cursor: pointer;
-            font-size: 1rem;
-            transition: background-color 0.2s;
-        }
-
-        .btn-primary:hover {
-            background-color: #2980b9;
-        }
-
-        .btn-primary:disabled {
-            background-color: #bdc3c7;
-            cursor: not-allowed;
-        }
-
-        /* Add loading dialog styles */
-        #loadingDialog {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-        }
-
-        .loading-spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #3498db;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
@@ -429,13 +341,13 @@
                     <div class="stat-card">
                         <h3>Completed</h3>
                         <p id="completedTasksCount">0</p>
-            </div>
+                    </div>
                 </div>
                 <div class="recent-tasks">
                     <h3>Recent Tasks</h3>
                     <div id="recentTasksList"></div>
-            </div>
-        </section>
+                </div>
+            </section>
 
             <!-- Tasks Section -->
             <section id="tasks" class="section">
@@ -466,16 +378,16 @@
                         <label for="taskBudget">Budget (ADA)</label>
                         <input type="number" id="taskBudget" min="1" required>
                     </div>
-                <div class="form-group">
-                    <label for="taskCategory">Category</label>
+                    <div class="form-group">
+                        <label for="taskCategory">Category</label>
                         <select id="taskCategory" required>
                             <option value="Web Development">Web Development</option>
                             <option value="Mobile Development">Mobile Development</option>
                             <option value="Data Science">Data Science</option>
                             <option value="Content Writing">Content Writing</option>
-                    </select>
-                </div>
-                <div class="form-group">
+                        </select>
+                    </div>
+                    <div class="form-group">
                         <label for="taskRequirements">Requirements (one per line)</label>
                         <textarea id="taskRequirements" required></textarea>
                     </div>
@@ -501,7 +413,7 @@
                             <input type="text" id="recipientAddress" name="recipientAddress" required 
                                    placeholder="addr_test1...">
                         </div>
-                <div class="form-group">
+                        <div class="form-group">
                             <label for="amount">Amount (ADA)</label>
                             <input type="number" id="amount" name="amount" required min="0.1" step="0.1">
                         </div>
@@ -515,7 +427,7 @@
                         <div class="loading">Loading transactions...</div>
                     </div>
                 </div>
-        </section>
+            </section>
 
             <!-- Settings Section -->
             <section id="settings" class="section">
@@ -524,17 +436,17 @@
                     <div class="form-group">
                         <label for="walletAddress">Cardano Wallet Address</label>
                         <input type="text" id="walletAddress" required>
-            </div>
+                    </div>
                     <div class="form-group">
                         <label>
                             <input type="checkbox" id="emailNotifications">
                             Receive Email Notifications
                         </label>
-            </div>
+                    </div>
                     <button type="submit" class="btn btn-primary">Save Settings</button>
                 </form>
-        </section>
-    </main>
+            </section>
+        </main>
     </div>
 
     <script>
@@ -552,6 +464,9 @@
             'completed': 'status-completed',
             'cancelled': 'status-cancelled'
         };
+
+        // Add this at the top of the script section
+        const CURRENT_CLIENT_ID = 'dev-client'; // In production, set this dynamically from the logged-in user
 
         // Initialize dashboard
         function initializeDashboard() {
@@ -578,8 +493,21 @@
                 });
                 const tasks = await response.json();
                 
-                // Filter tasks based on status
-                const filteredTasks = filter === 'all' ? tasks : tasks.filter(task => task.status === filter);
+                // Enhanced filtering logic for each tab
+                let filteredTasks;
+                if (filter === 'all') {
+                    filteredTasks = tasks;
+                } else if (filter === 'active') {
+                    filteredTasks = tasks.filter(task => task.status === 'active' && !task.assignedTo);
+                } else if (filter === 'in-progress') {
+                    filteredTasks = tasks.filter(task => (task.status === 'active' && task.assignedTo) || task.status === 'completed_by_student');
+                } else if (filter === 'completed') {
+                    filteredTasks = tasks.filter(task => task.status === 'completed');
+                } else if (filter === 'cancelled') {
+                    filteredTasks = tasks.filter(task => task.status === 'cancelled');
+                } else {
+                    filteredTasks = tasks;
+                }
                 
                 displayTasks(filteredTasks);
                 updateTaskCounts(tasks); // Update counts with all tasks
@@ -618,22 +546,49 @@
 
         // Get appropriate action buttons based on task status
         function getTaskActions(task) {
+            // Only the client can see the complete button
+            const isClient = task.clientId === CURRENT_CLIENT_ID;
             switch(task.status) {
                 case 'active':
-                    return `
-                        <button class="btn btn-danger" onclick="cancelTask('${task.id}')">Cancel</button>
-                    `;
-                case 'in-progress':
-                    return `
-                        <button class="btn btn-success" onclick="completeTask('${task.id}')">Mark Complete</button>
-                        <button class="btn btn-danger" onclick="cancelTask('${task.id}')">Cancel</button>
-                    `;
+                    if (!task.assignedTo) {
+                        return `
+                            <button class="btn btn-danger" onclick="cancelTask('${task.id}')">Cancel</button>
+                        `;
+                    } else {
+                        // In progress: show Complete Task button for client
+                        if (isClient) {
+                            return `
+                                <span class="task-status status-in-progress">Job Accepted</span>
+                                <button class="btn btn-success" onclick="completeTask('${task.id}')">Complete Task</button>
+                                <button class="btn btn-danger" onclick="cancelTask('${task.id}')">Cancel Job</button>
+                            `;
+                        } else {
+                            return `
+                                <span class="task-status status-in-progress">Job Accepted</span>
+                                <button class="btn btn-danger" onclick="cancelTask('${task.id}')">Cancel Job</button>
+                            `;
+                        }
+                    }
+                case 'completed_by_student':
+                    if (isClient) {
+                        return `
+                            <span class="task-status status-in-progress">Ready for Review</span>
+                            <button class="btn btn-success" onclick="completeTask('${task.id}')">Approve & Complete</button>
+                            <button class="btn btn-danger" onclick="cancelTask('${task.id}')">Cancel Job</button>
+                        `;
+                    } else {
+                        return `
+                            <span class="task-status status-in-progress">Ready for Review</span>
+                        `;
+                    }
                 case 'completed':
                     return `
+                        <span class="task-status status-completed">Payment Sent</span>
                         <button class="btn btn-primary" onclick="viewTaskDetails('${task.id}')">View Details</button>
                     `;
                 case 'cancelled':
                     return `
+                        <span class="task-status status-cancelled">Refund Processed</span>
                         <button class="btn btn-primary" onclick="viewTaskDetails('${task.id}')">View Details</button>
                     `;
                 default:
@@ -644,14 +599,21 @@
         // Update task counts in dashboard
         function updateTaskCounts(tasks) {
             const counts = {
-                active: tasks.filter(t => t.status === 'active').length,
-                'in-progress': tasks.filter(t => t.status === 'in-progress').length,
-                completed: tasks.filter(t => t.status === 'completed').length
+                active: tasks.filter(t => t.status === 'active' && !t.assignedTo).length,
+                'in-progress': tasks.filter(t => (t.status === 'active' && t.assignedTo) || t.status === 'completed_by_student').length,
+                completed: tasks.filter(t => t.status === 'completed').length,
+                cancelled: tasks.filter(t => t.status === 'cancelled').length
             };
 
             document.getElementById('activeTasksCount').textContent = counts.active;
             document.getElementById('inProgressTasksCount').textContent = counts['in-progress'];
             document.getElementById('completedTasksCount').textContent = counts.completed;
+            
+            // Update cancelled count if element exists
+            const cancelledElement = document.getElementById('cancelledTasksCount');
+            if (cancelledElement) {
+                cancelledElement.textContent = counts.cancelled;
+            }
         }
 
         // Set up event listeners
@@ -709,7 +671,7 @@
                 category: document.getElementById('taskCategory').value,
                 requirements: document.getElementById('taskRequirements').value.split('\n').filter(r => r.trim()),
                 status: 'active',
-                clientId: 'dev-user',
+                clientId: 'dev-client',
                 assignedTo: null,
                 createdAt: new Date().toISOString()
             };
@@ -741,39 +703,57 @@
 
         // Task actions
         async function cancelTask(taskId) {
-            if (confirm('Are you sure you want to cancel this task?')) {
+            if (confirm('Are you sure you want to cancel this task? This will refund any locked funds to your wallet.')) {
                 try {
+                    showLoading();
+                    
                     const response = await fetch(`/api/tasks/${taskId}/cancel`, {
-                        method: 'POST'
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('token')}`
+                        }
                     });
 
-                    if (response.ok) {
-                        loadTasks();
-                    } else {
-                        throw new Error('Failed to cancel task');
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || 'Failed to cancel task');
                     }
+
+                    hideLoading();
+                    showAlert('Task cancelled successfully', 'success');
+                    loadTasks();
                 } catch (error) {
+                    hideLoading();
                     console.error('Error cancelling task:', error);
-                    alert('Failed to cancel task. Please try again.');
+                    showAlert('Failed to cancel task: ' + error.message, 'error');
                 }
             }
         }
 
         async function completeTask(taskId) {
-            if (confirm('Are you sure you want to mark this task as complete?')) {
+            if (confirm('Are you sure you want to mark this task as complete? This will release payment to the student.')) {
                 try {
+                    showLoading();
+                    
                     const response = await fetch(`/api/tasks/${taskId}/complete`, {
-                        method: 'POST'
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('token')}`
+                        }
                     });
 
-                    if (response.ok) {
-                        loadTasks();
-                    } else {
-                        throw new Error('Failed to complete task');
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || 'Failed to complete task');
                     }
+
+                    hideLoading();
+                    showAlert('Task completed successfully and payment sent', 'success');
+                    loadTasks();
                 } catch (error) {
+                    hideLoading();
                     console.error('Error completing task:', error);
-                    alert('Failed to complete task. Please try again.');
+                    showAlert('Failed to complete task: ' + error.message, 'error');
                 }
             }
         }
@@ -862,10 +842,10 @@
                 <div class="transaction-item">
                     <div class="amount ${tx.type === 'sent' ? 'sent' : 'received'}">
                         ${tx.type === 'sent' ? '-' : '+'}${tx.amount} ADA
-                </div>
+                    </div>
                     <div class="timestamp">
                         ${new Date(tx.timestamp * 1000).toLocaleString()}
-                </div>
+                    </div>
                     <div class="status">${tx.status}</div>
                 </div>
             `).join('');
@@ -884,7 +864,7 @@
                 ">
                     <div style="margin-bottom: 10px;">Processing transaction...</div>
                     <div class="loading-spinner"></div>
-            </div>
+                </div>
             `;
             document.body.appendChild(loadingDiv);
         }
@@ -896,38 +876,19 @@
             }
         }
 
-        function showSuccess(message) {
-            const successDiv = document.createElement('div');
-            successDiv.style.cssText = `
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                background: #4CAF50;
-                color: white;
-                padding: 15px 25px;
-                border-radius: 4px;
-                z-index: 1000;
-            `;
-            successDiv.textContent = message;
-            document.body.appendChild(successDiv);
-            setTimeout(() => successDiv.remove(), 3000);
-        }
-
-        function showError(message) {
-            const errorDiv = document.createElement('div');
-            errorDiv.style.cssText = `
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                background: #f44336;
-                color: white;
-                padding: 15px 25px;
-                border-radius: 4px;
-                z-index: 1000;
-            `;
-            errorDiv.textContent = message;
-            document.body.appendChild(errorDiv);
-            setTimeout(() => errorDiv.remove(), 3000);
+        function showAlert(message, type = 'info') {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type}`;
+            alertDiv.innerHTML = message;
+            
+            // Add alert to page
+            const container = document.querySelector('.main-content');
+            container.insertBefore(alertDiv, container.firstChild);
+            
+            // Remove after 5 seconds
+            setTimeout(() => {
+                alertDiv.remove();
+            }, 5000);
         }
 
         // Add send ADA functionality

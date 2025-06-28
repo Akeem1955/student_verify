@@ -9,12 +9,9 @@ import { fileURLToPath } from 'url';
 import { Blockfrost, Lucid, Data, toHex, Constr} from 'lucid-cardano';
 import { BlockFrostAPI } from '@blockfrost/blockfrost-js';
 import NodeCache from 'node-cache';
-import jwt from 'jsonwebtoken';
-import bcrypt from 'bcryptjs';
+
 import * as Cardano from '@emurgo/cardano-serialization-lib-nodejs';
-import winston from 'winston';
-import { createLogger, format, transports } from 'winston';
-import rateLimit from 'express-rate-limit';
+
 import { logger, stream } from './config/logger.js';
 import escrow from './utils/escrowContract.js';
 import { getAikenScriptAddress,getAikenScript } from './utils/escrowContract.js';
@@ -547,567 +544,6 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 // Enhanced user storage with verification status
-const verificationTokens = new Map();
-const passwordResetTokens = new Map();
-
-// Generate secure random token
-function generateToken() {
-    return crypto.randomBytes(32).toString('hex');
-}
-
-// Simple JWT authentication middleware
-const authenticateToken = (req, res, next) => {
-    // Skip authentication in development mode
-    if (process.env.NODE_ENV === 'development') {
-        // Detect if this is a client or student dashboard/API call
-        // For now, always set to dev-client for client dashboard testing
-        req.user = {
-            id: 'dev-client',
-            role: 'client',
-            firstName: 'John',
-            lastName: 'Doe'
-        };
-        return next();
-    }
-
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-    
-    if (!token) {
-        return res.status(401).json({ error: 'No token provided' });
-    }
-    
-    jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-        if (err) {
-            return res.status(401).json({ error: 'Invalid token' });
-        }
-        req.user = user;
-        next();
-    });
-};
-
-// Simple registration endpoint
-app.post('/api/auth/register', async (req, res) => {
-    try {
-        const { email, password, firstName, lastName, role, walletAddress } = req.body;
-
-        // Log the received data (excluding password)
-        console.log('Registration attempt:', {
-            email,
-            firstName,
-            lastName,
-            role,
-            walletAddress,
-            hasPassword: !!password
-        });
-
-        // Basic validation with specific error messages
-        const missingFields = [];
-        if (!email) missingFields.push('email');
-        if (!password) missingFields.push('password');
-        if (!firstName) missingFields.push('firstName');
-        if (!lastName) missingFields.push('lastName');
-        if (!role) missingFields.push('role');
-        if (!walletAddress) missingFields.push('walletAddress');
-
-        if (missingFields.length > 0) {
-            console.log('Missing required fields:', missingFields);
-            return res.status(400).json({ 
-                error: 'Missing required fields',
-                details: missingFields,
-                message: `Please provide: ${missingFields.join(', ')}`
-            });
-        }
-
-        // Validate wallet address format
-        if (!walletAddress.match(/^(addr|addr_test1)[0-9a-zA-Z]{98,}$/)) {
-            console.log('Invalid wallet address format:', walletAddress);
-            return res.status(400).json({ 
-                error: 'Invalid wallet address format',
-                message: 'Please enter a valid Cardano wallet address (mainnet or testnet)'
-            });
-        }
-
-        // Check if email exists
-        if (users.has(email)) {
-            console.log('Email already registered:', email);
-            return res.status(400).json({ 
-                error: 'Email already registered',
-                message: 'This email address is already in use'
-            });
-        }
-
-        // Hash password
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        // Create user
-        const user = {
-            email,
-            password: hashedPassword,
-            firstName,
-            lastName,
-            role,
-            walletAddress,
-            createdAt: new Date().toISOString()
-        };
-
-        // Store user
-        users.set(email, user);
-
-        // Generate JWT token
-        const token = jwt.sign(
-            { email: user.email, role: user.role },
-            process.env.JWT_SECRET,
-            { expiresIn: '24h' }
-        );
-
-        res.status(201).json({
-            message: 'Registration successful',
-            token,
-            user: {
-                email: user.email,
-                firstName: user.firstName,
-                lastName: user.lastName,
-                role: user.role,
-                walletAddress: user.walletAddress
-            }
-        });
-    } catch (error) {
-        console.error('Registration error:', error);
-        res.status(500).json({ error: 'Registration failed' });
-    }
-});
-
-// Simple login endpoint
-app.post('/api/auth/login', async (req, res) => {
-    try {
-        const { email, password } = req.body;
-
-        // Basic validation
-        if (!email || !password) {
-            return res.status(400).json({ error: 'Email and password are required' });
-        }
-
-        // Find user
-        const user = users.get(email);
-        if (!user) {
-            return res.status(401).json({ error: 'Invalid credentials' });
-        }
-
-        // Verify password
-        const validPassword = await bcrypt.compare(password, user.password);
-        if (!validPassword) {
-            return res.status(401).json({ error: 'Invalid credentials' });
-        }
-
-        // Generate JWT token
-        const token = jwt.sign(
-            { email: user.email, role: user.role },
-            process.env.JWT_SECRET,
-            { expiresIn: '24h' }
-        );
-
-        res.json({
-            token,
-            user: {
-                email: user.email,
-                firstName: user.firstName,
-                lastName: user.lastName,
-                role: user.role
-            }
-        });
-    } catch (error) {
-        console.error('Login error:', error);
-        res.status(500).json({ error: 'Login failed' });
-    }
-});
-
-// Protected route example
-app.get('/api/user/profile', authenticateToken, (req, res) => {
-    const user = users.get(req.user.email);
-    if (!user) {
-        return res.status(404).json({ error: 'User not found' });
-    }
-
-    res.json({
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        role: user.role
-    });
-});
-
-// Initialize Lucid when server starts
-initializeLucid().catch(console.error);
-
-// ==========================================
-// Certificate Verification System (betaedu)
-// ==========================================
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-app.get('/verify-certificate', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'verify.html'));
-});
-
-app.get('/admin', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
-});
-
-// ==========================================
-// Student Freelance Platform Routes
-// ==========================================
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'landing.html'));
-});
-
-app.get('/login', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'login.html'));
-});
-
-app.get('/register', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'register.html'));
-});
-
-// Role-based middleware
-const requireRole = (role) => {
-    return (req, res, next) => {
-        if (!req.user) {
-            return res.status(401).json({ error: 'Authentication required' });
-        }
-        if (req.user.role !== role) {
-            return res.status(403).json({ error: 'Unauthorized access' });
-        }
-        next();
-    };
-};
-
-// Update client dashboard route to require authentication and client role
-app.get('/client-dashboard', authenticateToken, requireRole('client'), (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'client-dashboard.html'));
-});
-
-app.get('/student-dashboard', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'student-dashboard.html'));
-});
-
-// Serve static files
-app.use(express.static('public'));
-
-// ==========================================
-// API Routes for Freelance Platform
-// ==========================================
-app.post('/api/register', async (req, res) => {
-    try {
-        const { fullName, email, password, type, cardanoAddress, university, studentId, skills, organization, position } = req.body;
-        
-        // Check if email already exists
-        const existingUser = Array.from(users.values()).find(u => u.email === email);
-        if (existingUser) {
-            return res.status(400).json({ error: 'Email already registered' });
-        }
-        
-        // Hash password
-        const hashedPassword = await bcrypt.hash(password, 10);
-        
-        // Create user object
-        const user = {
-            id: Date.now().toString(),
-            username: fullName,
-            email,
-            password: hashedPassword,
-            role: type || 'student',
-            cardanoAddress,
-            profile: {
-                university,
-                studentId,
-                skills,
-                organization,
-                position
-            }
-        };
-        
-        // Store user
-        users.set(user.id, user);
-        
-        // Create user profile
-        const profile = {
-            userId: user.id,
-            fullName,
-            email,
-            type,
-            cardanoAddress,
-            university,
-            studentId,
-            skills,
-            organization,
-            position,
-            createdAt: new Date().toISOString()
-        };
-        userProfiles.set(user.id, profile);
-        
-        // Generate JWT token
-        const token = jwt.sign(
-            { id: user.id, role: user.role },
-            process.env.JWT_SECRET,
-            { expiresIn: '24h' }
-        );
-        
-        res.json({ 
-            token, 
-            user: { 
-                id: user.id, 
-                username: user.username, 
-                email: user.email, 
-                role: user.role,
-                type: user.role,
-                cardanoAddress: user.cardanoAddress
-            } 
-        });
-    } catch (error) {
-        console.error('Registration error:', error);
-        res.status(500).json({ error: 'Registration failed' });
-    }
-});
-
-app.post('/api/login', async (req, res) => {
-    try {
-        const { email, password } = req.body;
-        
-        // Find user (in a real app, this would query a database)
-        const user = Array.from(users.values()).find(u => u.email === email);
-        
-        if (!user) {
-            return res.status(401).json({ error: 'Invalid credentials' });
-        }
-        
-        // Verify password
-        const validPassword = await bcrypt.compare(password, user.password);
-        if (!validPassword) {
-            return res.status(401).json({ error: 'Invalid credentials' });
-        }
-        
-        // Generate JWT token
-        const token = jwt.sign(
-            { id: user.id, role: user.role },
-            process.env.JWT_SECRET,
-            { expiresIn: '24h' }
-        );
-        
-        res.json({ 
-            token, 
-            user: { 
-                id: user.id, 
-                username: user.username, 
-                email: user.email, 
-                role: user.role,
-                cardanoAddress: user.cardanoAddress 
-            } 
-        });
-    } catch (error) {
-        console.error('Login error:', error);
-        res.status(500).json({ error: 'Login failed' });
-    }
-});
-
-// Protected routes
-app.get('/api/user', authenticateToken, (req, res) => {
-    const user = users.get(req.user.id);
-    if (!user) {
-        return res.status(404).json({ error: 'User not found' });
-    }
-    res.json({ 
-        id: user.id, 
-        username: user.username, 
-        email: user.email, 
-        role: user.role,
-        cardanoAddress: user.cardanoAddress 
-    });
-});
-
-app.get('/api/tasks', authenticateToken, async (req, res) => {
-    try {
-        const tasks = JSON.parse(fs.readFileSync('data/tasks.json', 'utf8')).tasks;
-        res.json(tasks);
-    } catch (error) {
-        console.error('Error fetching tasks:', error);
-        res.status(500).json({ error: 'Failed to fetch tasks' });
-    }
-});
-
-app.post('/api/tasks', authenticateToken, async (req, res) => {
-    try {
-        // Read current tasks
-        const tasksData = JSON.parse(fs.readFileSync('data/tasks.json', 'utf8'));
-        
-        // Create new task
-        const newTask = {
-            id: Date.now().toString(),
-            ...req.body,
-            status: 'active',
-            clientId: req.user.id,
-            assignedTo: null,
-            createdAt: new Date().toISOString()
-        };
-        
-        // Add new task to tasks array
-        tasksData.tasks.push(newTask);
-        
-        // Write updated tasks back to file
-        fs.writeFileSync('data/tasks.json', JSON.stringify(tasksData, null, 2));
-        
-        res.status(201).json(newTask);
-    } catch (error) {
-        console.error('Error creating task:', error);
-        res.status(500).json({ error: 'Failed to create task' });
-    }
-});
-
-app.post('/api/tasks/:taskId/cancel', authenticateToken, async (req, res) => {
-    try {
-        const tasksData = JSON.parse(fs.readFileSync('data/tasks.json', 'utf8'));
-        const taskIndex = tasksData.tasks.findIndex(t => t.id === req.params.taskId);
-        
-        if (taskIndex === -1) {
-            return res.status(404).json({ error: 'Task not found' });
-        }
-        
-        const task = tasksData.tasks[taskIndex];
-        
-        // Check authorization: Either the client who posted the task or the student who accepted it
-        const isClient = task.clientId === req.user.id;
-        const isStudent = task.assignedTo === req.user.id;
-        
-        if (!isClient && !isStudent) {
-            return res.status(403).json({ error: 'Not authorized to cancel this task' });
-        }
-        
-        // If task has an associated escrow transaction, cancel it
-        if (task.escrowTxHash) {
-            try {
-                const result = await cancelEscrowContract(task.escrowTxHash, task.clientId);
-                // Store the cancellation transaction hash
-                task.refundTxHash = result.txHash;
-            } catch (escrowError) {
-                console.error('Error cancelling escrow:', escrowError);
-                // Continue with task cancellation even if escrow cancellation fails
-                // This ensures the task status is updated in our system
-            }
-        }
-        
-        // Update task status
-        task.status = 'cancelled';
-        task.cancelledAt = new Date().toISOString();
-        task.cancelledBy = req.user.id;
-        
-        // Write updated tasks back to file
-        fs.writeFileSync('data/tasks.json', JSON.stringify(tasksData, null, 2));
-        
-        res.json(task);
-    } catch (error) {
-        console.error('Error cancelling task:', error);
-        res.status(500).json({ error: 'Failed to cancel task' });
-    }
-});
-
-app.post('/api/tasks/:taskId/complete', authenticateToken, async (req, res) => {
-    try {
-        console.log('Completing task:', req.params.taskId);
-        // Read tasks from file
-        const tasksData = JSON.parse(fs.readFileSync('data/tasks.json', 'utf8'));
-        
-        // Find the task
-        const taskIndex = tasksData.tasks.findIndex(t => t.id === req.params.taskId);
-        console.log('Task index:', taskIndex);
-        
-        if (taskIndex === -1) {
-            return res.status(404).json({ error: 'Task not found' });
-        }
-        
-        const task = tasksData.tasks[taskIndex];
-        console.log('Is Task null Task:', task);
-        
-        // Check if task is assigned to someone
-        if (!task.assignedTo) {
-            console.log('Task is not assigned to anyone');
-            return res.status(400).json({ error: 'Task is not assigned to anyone' });
-        }
-        
-        const isClient = task.clientId === 'dev-client';
-        const isStudent = task.assignedTo === 'dev-student';
-        
-        if (!isClient && !isStudent) {
-            return res.status(403).json({ error: 'Not authorized to complete this task' });
-        }
-        
-        // Different logic based on who is marking the task as complete
-        if (isStudent) {
-            // Student marks the task as ready for review
-            if (task.status === 'active') {
-                task.status = 'completed_by_student';
-                task.completedByStudentAt = new Date().toISOString();
-                
-                // Write updated tasks back to file
-                fs.writeFileSync('data/tasks.json', JSON.stringify(tasksData, null, 2));
-                
-                return res.json(task);
-            } 
-        }
-        if (isClient) {
-            // Client approves and finalizes the task
-            if (task.status === 'completed_by_student') {
-                // If task has an escrow transaction, complete it
-                if (task.escrowTxHash) {
-                    try {
-                        console.log('ClientId ',task.clientId)
-                        console.log('AssignedTo ',task.assignedTo)
-                        const result = await completeEscrowContract(
-                            task.escrowTxHash, 
-                            task.clientId, 
-                            task.assignedTo
-                        );
-                        // Store the completion transaction hash
-                        task.paymentTxHash = result.txHash;
-                    } catch (escrowError) {
-                        console.error('Error completing escrow:', escrowError);
-                        return res.status(500).json({ 
-                            error: 'Failed to release payment', 
-                            details: escrowError.message 
-                        });
-                    }
-                }
-                
-                // Update task status
-                task.status = 'completed';
-                task.completedAt = new Date().toISOString();
-                
-                // Write updated tasks back to file
-                fs.writeFileSync('data/tasks.json', JSON.stringify(tasksData, null, 2));
-                
-                res.json(task);
-            } else {
-                return res.status(400).json({ 
-                    error: 'Task must be marked as completed by student first',
-                    status: task.status
-                });
-            }
-        }
-    } catch (error) {
-        console.error('Error completing task:', error);
-        res.status(500).json({ error: 'Failed to complete task' });
-    }
-});
-
-// Smart Contract Configuration
-let ESCROW_VALIDATOR_ADDRESS = process.env.ESCROW_VALIDATOR_ADDRESS;
-
-// Provide a testing address if in development mode and address not set
-if (!ESCROW_VALIDATOR_ADDRESS && process.env.NODE_ENV === 'development') {
-    ESCROW_VALIDATOR_ADDRESS = 'addr_test1qp9ppj4m8w4mshktrv3s85m4thgvnw3ps0p9lf53k359nphfz6367p7tqsz7mpc4h7892gkfafqfj35eh0pjqnl3hansxvdaxt';
-}
-
-console.log('Environment ESCROW_VALIDATOR_ADDRESS:', ESCROW_VALIDATOR_ADDRESS);
 const PLATFORM_FEE_PERCENTAGE = 5;
 
 // Transaction monitoring system
@@ -1121,157 +557,6 @@ const TransactionStatus = {
     FAILED: 'failed',
     EXPIRED: 'expired'
 };
-
-// Function to monitor transaction status
-async function monitorTransaction(txHash, callback) {
-    try {
-        // Store callback for later use
-        transactionCallbacks.set(txHash, callback);
-        
-        // Initial delay before checking (give time for the tx to propagate)
-        await new Promise(resolve => setTimeout(resolve, 5000));
-        
-        // Implement retry with exponential backoff
-        let retries = 0;
-        const maxRetries = 5;
-        let delay = 2000; // Start with 2 second delay
-        
-        const checkTxStatus = async () => {
-            try {
-                console.log(`Checking status of transaction ${txHash}, attempt ${retries + 1}/${maxRetries}`);
-                const tx = await blockfrost.txs(txHash);
-                
-                if (tx.status === 'confirmed') {
-                    await updateTransactionStatus(txHash, TransactionStatus.CONFIRMED);
-                    return true;
-                } else {
-                    await updateTransactionStatus(txHash, TransactionStatus.PENDING);
-                    
-                    // Start polling for status updates
-                    const pollInterval = setInterval(async () => {
-                        try {
-                            const updatedTx = await blockfrost.txs(txHash);
-                            
-                            if (updatedTx.status === 'confirmed') {
-                                clearInterval(pollInterval);
-                                await updateTransactionStatus(txHash, TransactionStatus.CONFIRMED);
-                            } else if (updatedTx.status === 'failed') {
-                                clearInterval(pollInterval);
-                                await updateTransactionStatus(txHash, TransactionStatus.FAILED);
-                            }
-                        } catch (error) {
-                            logger.error('Error polling transaction status:', error);
-                            clearInterval(pollInterval);
-                            await updateTransactionStatus(txHash, TransactionStatus.FAILED);
-                        }
-                    }, 10000); // Poll every 10 seconds
-                    
-                    // Set timeout for transaction expiration
-                    setTimeout(async () => {
-                        if (transactionStatus.get(txHash) === TransactionStatus.PENDING) {
-                            clearInterval(pollInterval);
-                            await updateTransactionStatus(txHash, TransactionStatus.EXPIRED);
-                        }
-                    }, 3600000); // 1 hour timeout
-                    
-                    return true;
-                }
-            } catch (error) {
-                // Handle 404 specifically - tx might not be on chain yet
-                if (error.status_code === 404) {
-                    retries++;
-                    if (retries < maxRetries) {
-                        console.log(`Transaction ${txHash} not found yet, retrying in ${delay/1000} seconds...`);
-                        await new Promise(resolve => setTimeout(resolve, delay));
-                        delay *= 2; // Exponential backoff
-                        return await checkTxStatus();
-                    } else {
-                        console.log(`Transaction ${txHash} not found after ${maxRetries} attempts`);
-                        await updateTransactionStatus(txHash, TransactionStatus.FAILED);
-                        return false;
-                    }
-                } else {
-                    throw error;
-                }
-            }
-        };
-        
-        await checkTxStatus();
-    } catch (error) {
-        logger.error('Error monitoring transaction:', error);
-        await updateTransactionStatus(txHash, TransactionStatus.FAILED);
-    }
-}
-
-// Function to update transaction status
-async function updateTransactionStatus(txHash, status) {
-    try {
-        // Update status in memory
-        transactionStatus.set(txHash, status);
-        
-        // Get callback if exists
-        const callback = transactionCallbacks.get(txHash);
-        if (callback) {
-            await callback(status);
-            transactionCallbacks.delete(txHash);
-        }
-        
-        // Log status update
-        logger.info(`Transaction ${txHash} status updated to ${status}`);
-        
-        // Update escrow status in database if needed
-        if (status === TransactionStatus.CONFIRMED) {
-            await updateEscrowStatus(txHash, 'completed');
-        } else if (status === TransactionStatus.FAILED || status === TransactionStatus.EXPIRED) {
-            await updateEscrowStatus(txHash, 'failed');
-        }
-    } catch (error) {
-        logger.error('Error updating transaction status:', error);
-    }
-}
-
-// Function to update escrow status
-async function updateEscrowStatus(txHash, status) {
-    try {
-        // Find escrow by transaction hash
-        const escrow = Array.from(tasks.values()).find(task => task.txHash === txHash);
-        if (escrow) {
-            escrow.status = status;
-            tasks.set(escrow.id, escrow);
-            
-            // Notify relevant parties
-            await notifyEscrowStatusUpdate(escrow);
-        }
-    } catch (error) {
-        logger.error('Error updating escrow status:', error);
-    }
-}
-
-// Function to notify parties about escrow status update
-async function notifyEscrowStatusUpdate(escrow) {
-    try {
-        const client = users.get(escrow.clientId);
-        const student = users.get(escrow.assignedTo);
-        
-        if (client && client.email) {
-            await sendEmail(
-                client.email,
-                'Escrow Status Update',
-                `Your escrow transaction (${escrow.txHash}) has been ${escrow.status}.`
-            );
-        }
-        
-        if (student && student.email) {
-            await sendEmail(
-                student.email,
-                'Escrow Status Update',
-                `Your escrow transaction (${escrow.txHash}) has been ${escrow.status}.`
-            );
-        }
-    } catch (error) {
-        logger.error('Error sending escrow status notifications:', error);
-    }
-}
 
 // Function to create or update user profile
 async function updateUserProfile(userId, profileData) {
@@ -1493,27 +778,26 @@ async function completeEscrowContract(txHash, clientId, studentId) {
             const aikenScript = await getAikenScript(lucid);
             console.log('Using derived Aiken script (complete):', aikenScript);
 
-            // Construct the ApproveWork redeemer as a Constr (index 0, field: ApproveWork action, index 2)
+            // Construct the ApproveWork redeemer as a Constr (index 0,  field: ApproveWork action, index 2)
             // EscrowRedeemer(EscrowAction.ApproveWork)
             const redeemer = Data.to(new Constr(0, [BigInt(2)]));
-        
-            const scriptUtxo = await lucid.utxosAt(scriptAddress);
+            //  utxosAt(scriptAddress);
+            const scriptUtxo = await lucid.utxosByOutRef([{ txHash, outputIndex: 0 }])[0]; 
+            const value = scriptUtxo.assets;
+            console.log('Script UTXO value:', value);
             console.log('Created ApproveWork redeemer:', redeemer);
+            console.log("THis Is THe Original Transaction Hash:", txHash);
             console.log('Script Utxo datum:', scriptUtxo);
+
         
 
-
-            // TODO: Retrieve studentAmount and platformFee for this escrow (not available in current signature)
-            // For now, use placeholders or fetch from DB/UTXO as needed
-            // const studentAmount = ...;
-            // const platformFee = ...;
 
             // Create and submit transaction
             const tx = await lucid
                 .newTx()
                 .collectFrom(scriptUtxo,redeemer)
                 .attachSpendingValidator(aikenScript)
-                //.payToAddress(studentProfile.cardanoAddress, { lovelace:100n })
+                .payToAddress(studentProfile.cardanoAddress, value)
                 // .payToAddress(process.env.PLATFORM_WALLET_ADDRESS, { lovelace: BigInt(platformFee) })
                 .complete();
 
@@ -1613,7 +897,7 @@ async function cancelEscrowContract(txHash, clientId) {
 }
 
 // API endpoint to get transaction status
-app.get('/api/escrow/:txHash/status', authenticateToken, async (req, res) => {
+app.get('/api/escrow/:txHash/status', async (req, res) => {
     try {
         const { txHash } = req.params;
         const status = transactionStatus.get(txHash) || TransactionStatus.PENDING;
@@ -1626,7 +910,7 @@ app.get('/api/escrow/:txHash/status', authenticateToken, async (req, res) => {
 });
 
 // API Routes for Unified Platform
-app.post('/api/profile', authenticateToken, async (req, res) => {
+app.post('/api/profile', async (req, res) => {
     try {
         const profileData = req.body;
         const updatedProfile = await updateUserProfile(req.user.id, profileData);
@@ -1637,7 +921,7 @@ app.post('/api/profile', authenticateToken, async (req, res) => {
     }
 });
 
-app.get('/api/profile/:userId', authenticateToken, async (req, res) => {
+app.get('/api/profile/:userId', async (req, res) => {
     try {
         const profile = userProfiles.get(req.params.userId);
         if (!profile) {
@@ -1650,7 +934,7 @@ app.get('/api/profile/:userId', authenticateToken, async (req, res) => {
     }
 });
 
-app.post('/api/escrow', authenticateToken, async (req, res) => {
+app.post('/api/escrow', async (req, res) => {
     try {
         const { studentId, amount, autoDeduct } = req.body;
         
@@ -1679,10 +963,38 @@ app.post('/api/escrow', authenticateToken, async (req, res) => {
     }
 });
 
-app.post('/api/escrow/:txHash/complete', authenticateToken, async (req, res) => {
+app.post('/api/escrow/:txHash/complete', async (req, res) => {
     try {
-        const { studentId } = req.body;
-        const result = await completeEscrowContract(req.params.txHash, req.user.id, studentId);
+        // Accept taskId, clientId, studentId from body (frontend sends all)
+        const { taskId, clientId: clientIdFromBody, studentId } = req.body;
+        const txHash = req.params.txHash;
+        // Use clientId from body if provided, else fallback to req.user.id
+        const clientId = clientIdFromBody || (req.user && req.user.id) || 'dev-client';
+
+        // 1. Complete escrow on-chain
+        const result = await completeEscrowContract(txHash, clientId, studentId);
+
+        // 2. Update the corresponding task as completed (by taskId if provided, else by escrowTxHash)
+        const tasksFilePath = 'data/tasks.json';
+        let tasksData = { tasks: [] };
+        if (fs.existsSync(tasksFilePath)) {
+            tasksData = JSON.parse(fs.readFileSync(tasksFilePath, 'utf8'));
+        }
+        let task;
+        if (taskId) {
+            task = tasksData.tasks.find(t => t.id === taskId);
+        }
+        if (!task) {
+            task = tasksData.tasks.find(t => t.escrowTxHash === txHash);
+        }
+        if (task) {
+            task.status = 'completed';
+            task.completedAt = new Date().toISOString();
+            // Optionally, add a transaction hash reference
+            task.completionTxHash = result.txHash || txHash;
+            fs.writeFileSync(tasksFilePath, JSON.stringify(tasksData, null, 2));
+        }
+
         res.json(result);
     } catch (error) {
         console.error('Error completing escrow:', error);
@@ -1691,7 +1003,7 @@ app.post('/api/escrow/:txHash/complete', authenticateToken, async (req, res) => 
 });
 
 // Endpoint for cancelling escrow contract - returns funds to client
-app.post('/api/escrow/:txHash/cancel', authenticateToken, async (req, res) => {
+app.post('/api/escrow/:txHash/cancel', async (req, res) => {
     try {
         const result = await cancelEscrowContract(req.params.txHash, req.user.id);
         res.json(result);
@@ -1702,7 +1014,7 @@ app.post('/api/escrow/:txHash/cancel', authenticateToken, async (req, res) => {
 });
 
 // Wallet balance endpoint
-app.get('/api/wallet/balance', authenticateToken, async (req, res) => {
+app.get('/api/wallet/balance', async (req, res) => {
     try {
         let user;
         if (process.env.NODE_ENV === 'development') {
@@ -1737,7 +1049,7 @@ app.get('/api/wallet/balance', authenticateToken, async (req, res) => {
 });
 
 // View wallet endpoint
-app.get('/api/wallet', authenticateToken, async (req, res) => {
+app.get('/api/wallet', async (req, res) => {
     try {
         const user = users.get(req.user.id);
         if (!user) {
@@ -1824,7 +1136,7 @@ app.post('/api/wallet/send', async (req, res) => {
 });
 
 // Wallet balance endpoint for specific address
-app.get('/api/wallet/balance/:address', authenticateToken, async (req, res) => {
+app.get('/api/wallet/balance/:address', async (req, res) => {
     try {
         const { address } = req.params;
 
@@ -1847,7 +1159,7 @@ app.get('/api/wallet/balance/:address', authenticateToken, async (req, res) => {
 });
 
 // Wallet transactions endpoint for specific address
-app.get('/api/wallet/transactions/:address', authenticateToken, async (req, res) => {
+app.get('/api/wallet/transactions/:address', async (req, res) => {
     try {
         const { address } = req.params;
 
@@ -1899,13 +1211,20 @@ app.get('/api/wallet/transactions/:address', authenticateToken, async (req, res)
 app.get('/api/tasks/available', async (req, res) => {
     try {
         // Read tasks from file
-        const tasksData = JSON.parse(fs.readFileSync('data/tasks.json', 'utf8'));
-        
+        let tasksData = { tasks: [] };
+        try {
+            if (fs.existsSync('data/tasks.json')) {
+                tasksData = JSON.parse(fs.readFileSync('data/tasks.json', 'utf8'));
+            }
+        } catch (err) {
+            console.warn('Warning: Could not read tasks.json:', err);
+        }
+
         // Filter active tasks that haven't been assigned
-        const availableTasks = tasksData.tasks.filter(task => 
-            task.status === 'active' && !task.assignedTo
-        );
-        
+        const availableTasks = Array.isArray(tasksData.tasks)
+            ? tasksData.tasks.filter(task => task.status === 'active' && !task.assignedTo)
+            : [];
+
         // Get client names for each task and map budget to amount
         const tasksWithClientNames = availableTasks.map(task => {
             const client = users.get(task.clientId);
@@ -1916,11 +1235,11 @@ app.get('/api/tasks/available', async (req, res) => {
                 requiredSkills: task.requirements || [] // Map requirements to requiredSkills
             };
         });
-        
+
         res.json(tasksWithClientNames);
     } catch (error) {
         console.error('Error fetching available tasks:', error);
-        res.status(500).json({ error: 'Failed to fetch available tasks' });
+        res.status(200).json([]); // Gracefully return empty array
     }
 });
 
@@ -1928,13 +1247,20 @@ app.get('/api/tasks/available', async (req, res) => {
 app.get('/api/tasks/my-jobs', async (req, res) => {
     try {
         // Read tasks from file
-        const tasksData = JSON.parse(fs.readFileSync('data/tasks.json', 'utf8'));
-        
+        let tasksData = { tasks: [] };
+        try {
+            if (fs.existsSync('data/tasks.json')) {
+                tasksData = JSON.parse(fs.readFileSync('data/tasks.json', 'utf8'));
+            }
+        } catch (err) {
+            console.warn('Warning: Could not read tasks.json:', err);
+        }
+
         // Filter tasks assigned to the current student
-        const myTasks = tasksData.tasks.filter(task => 
-            task.assignedTo === 'dev-student' // Use dev-student for the current student
-        );
-        
+        const myTasks = Array.isArray(tasksData.tasks)
+            ? tasksData.tasks.filter(task => task.assignedTo === 'dev-student')
+            : [];
+
         // Get client names for each task and map budget to amount
         const tasksWithClientNames = myTasks.map(task => {
             const client = users.get(task.clientId);
@@ -1945,16 +1271,16 @@ app.get('/api/tasks/my-jobs', async (req, res) => {
                 requiredSkills: task.requirements || [] // Map requirements to requiredSkills
             };
         });
-        
+
         res.json(tasksWithClientNames);
     } catch (error) {
         console.error('Error fetching my tasks:', error);
-        res.status(500).json({ error: 'Failed to fetch my tasks' });
+        res.status(200).json([]); // Gracefully return empty array
     }
 });
 
 // Accept a job
-app.post('/api/tasks/:taskId/accept', authenticateToken, async (req, res) => {
+app.post('/api/tasks/:taskId/accept', async (req, res) => {
     try {
         // Read tasks from file
         const tasksData = JSON.parse(fs.readFileSync('data/tasks.json', 'utf8'));
@@ -2003,6 +1329,64 @@ app.post('/api/tasks/:taskId/accept', authenticateToken, async (req, res) => {
     } catch (error) {
         console.error('Error accepting task:', error);
         res.status(500).json({ error: 'Failed to accept task' });
+    }
+});
+
+// Create a new task
+app.post('/api/tasks', async (req, res) => {
+    try {
+        // Read tasks from file
+        const tasksFilePath = 'data/tasks.json';
+        let tasksData = { tasks: [] };
+        if (fs.existsSync(tasksFilePath)) {
+            tasksData = JSON.parse(fs.readFileSync(tasksFilePath, 'utf8'));
+        }
+
+        // Extract task data from request body
+        const { title, description, budget, category, requirements } = req.body;
+        if (!title || !description || !budget || !category || !requirements) {
+            return res.status(400).json({ error: 'Missing required fields' });
+        }
+
+        // Create new task object
+        const newTask = {
+            id: Date.now().toString(),
+            title,
+            description,
+            budget: parseFloat(budget),
+            category,
+            requirements: Array.isArray(requirements) ? requirements : requirements.split('\n').filter(r => r.trim()),
+            status: 'active',
+            clientId: 'dev-client', // Use dev-client for development
+            assignedTo: null,
+            createdAt: new Date().toISOString()
+        };
+
+        // Add new task to tasks array
+        tasksData.tasks.push(newTask);
+
+        // Write updated tasks back to file
+        fs.writeFileSync(tasksFilePath, JSON.stringify(tasksData, null, 2));
+
+        res.status(201).json(newTask);
+    } catch (error) {
+        console.error('Error creating task:', error);
+        res.status(500).json({ error: 'Failed to create task' });
+    }
+});
+
+// Get all tasks
+app.get('/api/tasks', async (req, res) => {
+    try {
+        const tasksFilePath = 'data/tasks.json';
+        let tasksData = { tasks: [] };
+        if (fs.existsSync(tasksFilePath)) {
+            tasksData = JSON.parse(fs.readFileSync(tasksFilePath, 'utf8'));
+        }
+        res.json(tasksData.tasks);
+    } catch (error) {
+        console.error('Error fetching all tasks:', error);
+        res.status(500).json({ error: 'Failed to fetch tasks' });
     }
 });
 
@@ -2074,9 +1458,7 @@ app.use((err, req, res, next) => {
 });
 
 // Start the server
-app.listen(process.env.PORT || 3000, () => {
-    console.log(`Server is running on port ${process.env.PORT || 3000}`);
-});
+
 
 // Escrow Contract Routes
 app.post('/api/escrow/create', async (req, res) => {
@@ -2205,7 +1587,7 @@ app.get('/api/blockchain/tx/:txHash', async (req, res) => {
 }); 
 
 // Get a single task by ID
-app.get('/api/tasks/:taskId', authenticateToken, async (req, res) => {
+app.get('/api/tasks/:taskId', async (req, res) => {
     try {
         // Read tasks from file
         const tasksData = JSON.parse(fs.readFileSync('data/tasks.json', 'utf8'));
@@ -2280,3 +1662,27 @@ app.post('/api/verify', upload.single('document'), async (req, res) => {
         res.status(500).json({ error: error.message || 'Failed to verify document' });
     }
 });
+
+
+const startServer = async () => {
+    try {
+        console.log('Starting application initialization...');
+        
+        // **FIX**: Initialize Blockfrost and Lucid wallet connection
+        await initializeLucid(); 
+        
+        console.log('Application initialization complete.');
+
+        // Start the server only after successful initialization
+        app.listen(process.env.PORT || 3000, () => {
+            console.log(`Server is running on port ${process.env.PORT || 3000}`);
+        });
+
+    } catch (error) {
+        console.error('FATAL: Failed to start the server:', error.message);
+        process.exit(1); // Exit with a failure code if initialization fails
+    }
+};
+
+// Execute the startup function
+startServer();

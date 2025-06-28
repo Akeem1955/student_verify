@@ -1,1 +1,20 @@
-{"tasks": []}
+{
+  "tasks": [
+    {
+      "id": "1751041295426",
+      "title": "BlockChain",
+      "description": "I Am Good",
+      "budget": 100,
+      "category": "Web Development",
+      "requirements": [
+        "We Re Jusr testing..."
+      ],
+      "status": "active",
+      "clientId": "dev-client",
+      "assignedTo": "dev-student",
+      "createdAt": "2025-06-27T16:21:35.426Z",
+      "assignedAt": "2025-06-27T21:41:00.072Z",
+      "escrowTxHash": "eabbe66d753c4465ae979dfee3e0f27dd75a286ef15ec90393bc788918d132d7"
+    }
+  ]
+}

@@ -734,19 +734,30 @@
             if (confirm('Are you sure you want to mark this task as complete? This will release payment to the student.')) {
                 try {
                     showLoading();
-                    
-                    const response = await fetch(`/api/tasks/${taskId}/complete`, {
+                    // Find the task to get escrowTxHash and studentId
+                    const allTasksResp = await fetch('/api/tasks', {
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                    });
+                    const allTasks = await allTasksResp.json();
+                    const task = allTasks.find(t => t.id === taskId);
+                    if (!task || !task.escrowTxHash) {
+                        throw new Error('Escrow transaction not found for this task.');
+                    }
+                    const txHash = task.escrowTxHash;
+                    const studentId = task.assignedTo;
+                    const clientId = task.clientId || CURRENT_CLIENT_ID;
+                    const response = await fetch(`/api/escrow/${txHash}/complete`, {
                         method: 'POST',
                         headers: {
+                            'Content-Type': 'application/json',
                             'Authorization': `Bearer ${localStorage.getItem('token')}`
-                        }
+                        },
+                        body: JSON.stringify({ taskId, clientId, studentId })
                     });
-
                     if (!response.ok) {
                         const errorData = await response.json();
                         throw new Error(errorData.error || 'Failed to complete task');
                     }
-
                     hideLoading();
                     showAlert('Task completed successfully and payment sent', 'success');
                     loadTasks();
@@ -791,39 +802,22 @@
         // Add these functions to your existing script
         async function loadWalletInfo() {
             try {
-                // Fetch balance from our server endpoint
-                const response = await fetch('/api/wallet/balance', {
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('token')}`
-                    }
-                });
-                
-                if (!response.ok) {
-                    throw new Error('Failed to fetch wallet balance');
-                }
-                
+                // Use the dev-client wallet address for development
+                const walletAddress = mockUser.walletAddress;
+                // Fetch balance from /api/wallet/balance/:address
+                const response = await fetch(`/api/wallet/balance/${walletAddress}`);
+                if (!response.ok) throw new Error('Failed to fetch wallet balance');
                 const data = await response.json();
-                
-                // Update balance display
                 document.getElementById('walletBalance').textContent = data.balance;
-                
-                // Update wallet address display
-                document.getElementById('walletAddress').textContent = mockUser.walletAddress;
-                
-                // Load transaction history
-                const txResponse = await fetch('/api/wallet', {
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('token')}`
-                    }
-                });
-                
+                document.getElementById('walletAddress').textContent = walletAddress;
+                // Fetch transactions from /api/wallet/transactions/:address
+                const txResponse = await fetch(`/api/wallet/transactions/${walletAddress}`);
                 if (txResponse.ok) {
-                    const walletData = await txResponse.json();
-                    displayTransactions(walletData.transactions);
+                    const transactions = await txResponse.json();
+                    displayTransactions(transactions);
                 }
             } catch (error) {
                 console.error('Error loading wallet info:', error);
-                // Set default values if loading fails
                 document.getElementById('walletBalance').textContent = '0';
                 document.getElementById('walletAddress').textContent = mockUser.walletAddress;
                 document.getElementById('transactionList').innerHTML = '<p class="no-tasks">Failed to load transactions</p>';

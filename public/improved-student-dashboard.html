@@ -465,33 +465,7 @@
 
     <script type="module">
         import EscrowManager from './js/escrow.js';
-
-        // --- Status helpers for job rendering ---
-        function getStatusClass(status) {
-            switch ((status || '').toLowerCase()) {
-                case 'active': return 'active';
-                case 'in-progress': return 'in-progress';
-                case 'completed': return 'completed';
-                case 'confirmed': return 'confirmed';
-                case 'pending': return 'pending';
-                case 'failed': return 'failed';
-                case 'cancelled': return 'cancelled';
-                default: return '';
-            }
-        }
-        function getStatusText(status) {
-            switch ((status || '').toLowerCase()) {
-                case 'active': return 'Active';
-                case 'in-progress': return 'In Progress';
-                case 'completed': return 'Completed';
-                case 'confirmed': return 'Confirmed';
-                case 'pending': return 'Pending';
-                case 'failed': return 'Failed';
-                case 'cancelled': return 'Cancelled';
-                default: return status || '';
-            }
-        }
-
+        
         const escrowManager = new EscrowManager();
         
         const state = {
@@ -519,8 +493,8 @@
         async function initializeDashboard() {
             showLoading();
             try {
-                // Load user profile (dev mode: use dev-student)
-                const userResponse = await fetch('/api/profile/dev-student');
+                // Load user profile
+                const userResponse = await fetch('/api/user/profile');
                 if (userResponse.ok) {
                     const userData = await userResponse.json();
                     document.getElementById('userName').textContent = `${userData.firstName} ${userData.lastName}`;
@@ -587,8 +561,6 @@
                     e.preventDefault();
                     const section = e.currentTarget.getAttribute('href').substring(1);
                     showSection(section);
-                    // Close sidebar on mobile after navigation
-                    document.body.classList.remove('sidebar-toggled');
                 });
             });
             document.getElementById('settingsForm').addEventListener('submit', async (e) => {
@@ -699,37 +671,17 @@
         }
 
         async function loadJobsData() {
-            // Fetch available jobs
-            let availableJobs = [];
             try {
                 const availableJobsResponse = await fetch('/api/tasks/available');
-                if (availableJobsResponse.ok) {
-                    availableJobs = await availableJobsResponse.json();
-                    if (!Array.isArray(availableJobs)) availableJobs = [];
-                } else {
-                    const err = await availableJobsResponse.json().catch(() => ({}));
-                    console.warn('Available jobs error:', err.error || availableJobsResponse.statusText);
-                }
-            } catch (err) {
-                console.warn('Available jobs fetch failed:', err);
-            }
-            displayAvailableJobs(availableJobs);
-
-            // Fetch my jobs
-            let myJobs = [];
-            try {
+                const availableJobs = await availableJobsResponse.json();
+                displayAvailableJobs(availableJobs);
                 const myJobsResponse = await fetch('/api/tasks/my-jobs');
-                if (myJobsResponse.ok) {
-                    myJobs = await myJobsResponse.json();
-                    if (!Array.isArray(myJobs)) myJobs = [];
-                } else {
-                    const err = await myJobsResponse.json().catch(() => ({}));
-                    console.warn('My jobs error:', err.error || myJobsResponse.statusText);
-                }
-            } catch (err) {
-                console.warn('My jobs fetch failed:', err);
+                const myJobs = await myJobsResponse.json();
+                displayMyJobs(myJobs);
+            } catch (error) {
+                console.error('Error loading jobs:', error);
+                showError('Failed to load jobs');
             }
-            displayMyJobs(myJobs);
         }
 
         function displayAvailableJobs(jobs) {
@@ -759,26 +711,6 @@
             `).join('');
         }
         
-        function getJobActions(job) {
-            // Only show actions for jobs that are active or in-progress
-            if (!job || !job.status) return '';
-            const status = (job.status || '').toLowerCase();
-            let actions = '';
-            if (status === 'active' || status === 'in-progress') {
-                actions += `<div class="job-actions" style="margin-top: 1rem;">`;
-                if (status === 'active') {
-                    actions += `<button class="btn btn-accept" onclick="window.completeJob('${job.id}')">Mark as Complete</button> `;
-                }
-                if (status === 'in-progress') {
-                    actions += `<button class="btn btn-accept" onclick="window.completeJob('${job.id}')">Mark as Complete</button> `;
-                }
-                actions += `<button class="btn btn-danger" onclick="window.cancelJob('${job.id}')">Cancel Job</button>`;
-                actions += `</div>`;
-            }
-            // No actions for completed, cancelled, failed, etc.
-            return actions;
-        }
-
         function displayMyJobs(jobs) {
             const container = document.getElementById('myJobs');
             if (!jobs || jobs.length === 0) {

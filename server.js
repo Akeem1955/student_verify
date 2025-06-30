@@ -1,3 +1,5 @@
+// Serve the certificate verification page
+
 import dotenv from 'dotenv';
 import express from 'express';
 import multer from 'multer';
@@ -1498,6 +1500,12 @@ app.post('/api/escrow/approve', async (req, res) => {
         console.error('Error approving work:', error);
         res.status(500).json({ error: error.message });
     }
+});
+app.get('/verify-certificate', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'verify.html'));
+});
+app.get('/admin', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
 app.post('/api/escrow/claim-payment', async (req, res) => {
